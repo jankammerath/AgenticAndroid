@@ -36,7 +36,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(AgentForegroundService.EXTRA_RESULT_DATA, result.data)
             }
             ContextCompat.startForegroundService(this, svcIntent)
-            refreshUi()
+            txtCaptureStatus.postDelayed({ refreshUi() }, 400)
         }
     }
 

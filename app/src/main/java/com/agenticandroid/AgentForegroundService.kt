@@ -85,11 +85,22 @@ class AgentForegroundService : Service() {
                 @Suppress("DEPRECATION")
                 val data = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
                 val port = NativeBridge.nativeGetServerPort().takeIf { it > 0 } ?: 8080
-                startAsForeground(port, withMediaProjection = true)
                 if (code == Activity.RESULT_OK && data != null) {
-                    startMediaCast(code, data)
+                    try {
+                        startAsForeground(port, withMediaProjection = true)
+                        if (!NativeBridge.nativeIsServerRunning()) {
+                            NativeBridge.nativeStartServer(port, filesDir.absolutePath, NativeBridge)
+                            startFallbackPoller()
+                        }
+                        startMediaCast(code, data)
+                    } catch (_: Throwable) {
+                        stopMediaCast()
+                        startAsForeground(port, withMediaProjection = false)
+                    }
+                } else {
+                    startAsForeground(port, withMediaProjection = false)
                 }
-                return START_STICKY
+                return START_NOT_STICKY
             }
             else -> {
                 val port = intent?.getIntExtra(EXTRA_PORT, 8080) ?: 8080
@@ -158,6 +169,12 @@ class AgentForegroundService : Service() {
         val ht = HandlerThread("ScreenCapture").apply { start() }
         captureThread = ht
         val handler = Handler(ht.looper)
+
+        projection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                stopMediaCast()
+            }
+        }, handler)
 
         val reader = ImageReader.newInstance(streamW, streamH, PixelFormat.RGBA_8888, 2)
         imageReader = reader
