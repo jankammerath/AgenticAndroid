@@ -6,6 +6,32 @@ PORT="${PORT:-8080}"
 AVD_NAME="${AVD_NAME:-}"
 BUILD_ONLY="${BUILD_ONLY:-0}"
 
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --avd|-a)
+      AVD_NAME="${2:?Missing value for $1}"
+      shift 2
+      ;;
+    --port|-p)
+      PORT="${2:?Missing value for $1}"
+      shift 2
+      ;;
+    --build-only)
+      BUILD_ONLY=1
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: ./launch.sh [--avd <AVD_NAME>] [--port <PORT>] [--build-only]"
+      echo "Env vars: AVD_NAME, PORT (default 8080), ABI, BUILD_ONLY=1"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1 (use --help for usage)" >&2
+      exit 1
+      ;;
+  esac
+done
+
 # Prefer rustup toolchain in ~/.cargo/bin
 if [ -d "$HOME/.cargo/bin" ]; then
   export PATH="$HOME/.cargo/bin:$PATH"
@@ -124,7 +150,11 @@ RUNNING_SERIAL="$("$ADB" devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
 
 if [ -z "$RUNNING_SERIAL" ]; then
   if [ -z "$AVD_NAME" ]; then
-    AVD_NAME="$("$EMULATOR" -list-avds | head -n 1 || true)"
+    ALL_AVDS="$("$EMULATOR" -list-avds || true)"
+    AVD_NAME="$(echo "$ALL_AVDS" | grep -iE 'pixel|phone' | head -n 1 || true)"
+    if [ -z "$AVD_NAME" ]; then
+      AVD_NAME="$(echo "$ALL_AVDS" | head -n 1 || true)"
+    fi
   fi
 
   if [ -z "$AVD_NAME" ]; then
