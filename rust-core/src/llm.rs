@@ -158,6 +158,162 @@ pub fn device_tool_definitions() -> Vec<Value> {
     ]
 }
 
+pub async fn fetch_provider_models(
+    client: &reqwest::Client,
+    provider: &Provider,
+    api_key: &str,
+) -> Result<Vec<String>, String> {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Err(format!(
+            "No API key configured for {}.",
+            provider.display_name()
+        ));
+    }
+
+    match provider {
+        Provider::Claude => {
+            let resp = client
+                .get("https://api.anthropic.com/v1/models?limit=100")
+                .header("x-api-key", key)
+                .header("anthropic-version", "2023-06-01")
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch Claude models: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("Claude models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let models: Vec<String> = data["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(models)
+        }
+        Provider::Gemini => {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100&key={key}"
+            );
+            let resp = client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch Gemini models: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("Gemini models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let mut models: Vec<String> = data["models"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter(|m| {
+                            m["supportedGenerationMethods"]
+                                .as_array()
+                                .map(|methods| {
+                                    methods
+                                        .iter()
+                                        .any(|v| v.as_str() == Some("generateContent"))
+                                })
+                                .unwrap_or(true)
+                        })
+                        .filter_map(|m| {
+                            m["name"]
+                                .as_str()
+                                .map(|s| s.strip_prefix("models/").unwrap_or(s).to_string())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            models.sort();
+            models.reverse();
+            Ok(models)
+        }
+        Provider::Grok => {
+            let resp = client
+                .get("https://api.x.ai/v1/models")
+                .bearer_auth(key)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch Grok models: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("Grok models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let mut models: Vec<String> = data["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            models.sort();
+            models.reverse();
+            Ok(models)
+        }
+        Provider::OpenAI => {
+            let resp = client
+                .get("https://api.openai.com/v1/models")
+                .bearer_auth(key)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch OpenAI models: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("OpenAI models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let all_models: Vec<String> = data["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut chat_models: Vec<String> = all_models
+                .iter()
+                .filter(|id| {
+                    let s = id.as_str();
+                    (s.starts_with("gpt-")
+                        || s.starts_with("o1")
+                        || s.starts_with("o3")
+                        || s.starts_with("o4")
+                        || s.starts_with("chatgpt-"))
+                        && !s.contains("instruct")
+                        && !s.contains("realtime")
+                        && !s.contains("audio")
+                        && !s.contains("transcribe")
+                        && !s.contains("tts")
+                })
+                .cloned()
+                .collect();
+            if chat_models.is_empty() {
+                chat_models = all_models;
+            }
+            chat_models.sort();
+            chat_models.reverse();
+            Ok(chat_models)
+        }
+    }
+}
+
 pub async fn call_llm(
     client: &reqwest::Client,
     provider: &Provider,

@@ -290,6 +290,7 @@ html, body {
 }
 
 .key-warning {
+  margin: 10px 14px 0;
   padding: 7px 10px;
   border-radius: 6px;
   background: rgba(245, 158, 11, 0.14);
@@ -386,23 +387,75 @@ html, body {
 }
 
 .chat-input-bar {
-  display: flex;
-  gap: 8px;
   padding: 12px 14px;
   background: var(--panel);
   border-top: 1px solid var(--border);
 }
 
-.chat-input-bar textarea {
-  flex: 1;
-  resize: none;
+.composer-box {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.composer-box:focus-within {
+  border-color: var(--accent);
+}
+
+.composer-box textarea {
+  width: 100%;
+  resize: none;
+  background: transparent;
+  border: none;
+  outline: none;
   color: var(--text);
-  padding: 8px 10px;
+  padding: 10px 12px 6px;
   font-family: inherit;
   font-size: 13px;
+}
+
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(48, 54, 61, 0.6);
+  background: rgba(22, 27, 34, 0.55);
+  flex-wrap: wrap;
+}
+
+.model-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.model-controls select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  max-width: 240px;
+}
+
+.model-source-hint {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.model-source-hint.live {
+  color: #86efac;
 }
 
 /* Device Pane */

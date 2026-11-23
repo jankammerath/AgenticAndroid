@@ -1,6 +1,7 @@
 (() => {
   const state = {
     providers: [],
+    providerModelsCache: {},
     config: null,
     sessions: [],
     activeSessionId: null,
@@ -29,7 +30,8 @@
     sessionList: document.getElementById("session-list"),
     sessionProvider: document.getElementById("session-provider"),
     sessionModelSelect: document.getElementById("session-model-select"),
-    sessionModelInput: document.getElementById("session-model-input"),
+    btnRefreshModels: document.getElementById("btn-refresh-models"),
+    modelSourceHint: document.getElementById("model-source-hint"),
     keyWarning: document.getElementById("key-warning"),
     chatMessages: document.getElementById("chat-messages"),
     agentActivity: document.getElementById("agent-activity"),
@@ -73,18 +75,84 @@
     return state.sessions.find((s) => s.id === state.activeSessionId) || state.sessions[0] || null;
   }
 
-  function populateModels(providerId, selectedModel) {
+  function populateModels(providerId, selectedModel, modelsOverride = null, source = null) {
+    const cached = state.providerModelsCache[providerId];
     const p = state.providers.find((x) => x.id === providerId);
-    const models = p ? p.models : [];
+    const models = modelsOverride || cached?.models || (p ? p.models : []);
+    const effSource = source || cached?.source || "fallback";
+
     els.sessionModelSelect.innerHTML = "";
+    let hasSelected = false;
     for (const m of models) {
       const opt = document.createElement("option");
       opt.value = m;
       opt.textContent = m;
-      if (m === selectedModel) opt.selected = true;
+      if (m === selectedModel) {
+        opt.selected = true;
+        hasSelected = true;
+      }
       els.sessionModelSelect.appendChild(opt);
     }
-    els.sessionModelInput.value = selectedModel || (models[0] || "");
+
+    if (selectedModel && !hasSelected) {
+      const opt = document.createElement("option");
+      opt.value = selectedModel;
+      opt.textContent = selectedModel;
+      opt.selected = true;
+      els.sessionModelSelect.prepend(opt);
+    }
+
+    if (effSource === "api") {
+      els.modelSourceHint.textContent = `${models.length} models`;
+      els.modelSourceHint.className = "model-source-hint live";
+      els.modelSourceHint.title = "Fetched live from provider API";
+    } else if (effSource === "loading") {
+      els.modelSourceHint.textContent = "Loading...";
+      els.modelSourceHint.className = "model-source-hint";
+      els.modelSourceHint.title = "Fetching models from provider API";
+    } else {
+      els.modelSourceHint.textContent = "Add API key";
+      els.modelSourceHint.className = "model-source-hint";
+      els.modelSourceHint.title = cached?.error || "Configure API key to fetch live models";
+    }
+  }
+
+  async function fetchModelsForProvider(providerId, force = false) {
+    const session = getActiveSession();
+    if (!force && state.providerModelsCache[providerId]?.source === "api") {
+      populateModels(providerId, session?.model);
+      return state.providerModelsCache[providerId];
+    }
+
+    populateModels(providerId, session?.model, null, "loading");
+    try {
+      const data = await api(`/api/providers/${encodeURIComponent(providerId)}/models`);
+      state.providerModelsCache[providerId] = data;
+      const active = getActiveSession();
+      if (active && active.provider === providerId) {
+        const models = data.models || [];
+        let targetModel = active.model;
+        if (models.length > 0 && !models.includes(targetModel)) {
+          targetModel = models[0];
+          await api(`/api/sessions/${active.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ model: targetModel }),
+          });
+          active.model = targetModel;
+          renderSessions();
+        }
+        populateModels(providerId, targetModel, models, data.source);
+      }
+      return data;
+    } catch (err) {
+      const fallback = { ok: false, source: "fallback", error: err.message, models: [] };
+      state.providerModelsCache[providerId] = fallback;
+      const active = getActiveSession();
+      if (active && active.provider === providerId) {
+        populateModels(providerId, active.model, null, "fallback");
+      }
+      return fallback;
+    }
   }
 
   function updateKeyWarning() {
@@ -166,6 +234,9 @@
       state.activeSessionId = session.id;
       els.sessionProvider.value = session.provider;
       populateModels(session.provider, session.model);
+      if (!state.providerModelsCache[session.provider]) {
+        fetchModelsForProvider(session.provider);
+      }
     }
     renderSessions();
     renderMessages();
@@ -417,20 +488,21 @@
     if (!session) return;
     const provider = els.sessionProvider.value;
     const p = state.providers.find((x) => x.id === provider);
-    const model = p?.models?.[0] || "";
+    const cachedModels = state.providerModelsCache[provider]?.models;
+    const model = (cachedModels && cachedModels[0]) || p?.models?.[0] || "";
     populateModels(provider, model);
     await api(`/api/sessions/${session.id}`, {
       method: "PUT",
       body: JSON.stringify({ provider, model }),
     });
     await loadSessions();
+    await fetchModelsForProvider(provider);
   });
 
   els.sessionModelSelect.addEventListener("change", async () => {
     const session = getActiveSession();
     if (!session) return;
     const model = els.sessionModelSelect.value;
-    els.sessionModelInput.value = model;
     await api(`/api/sessions/${session.id}`, {
       method: "PUT",
       body: JSON.stringify({ model }),
@@ -438,16 +510,9 @@
     await loadSessions();
   });
 
-  els.sessionModelInput.addEventListener("change", async () => {
-    const session = getActiveSession();
-    if (!session) return;
-    const model = els.sessionModelInput.value.trim();
-    if (!model) return;
-    await api(`/api/sessions/${session.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ model }),
-    });
-    await loadSessions();
+  els.btnRefreshModels.addEventListener("click", async () => {
+    const provider = els.sessionProvider.value;
+    await fetchModelsForProvider(provider, true);
   });
 
   // Chat submit
@@ -464,7 +529,7 @@
       body: JSON.stringify({
         content,
         provider: els.sessionProvider.value,
-        model: els.sessionModelInput.value.trim(),
+        model: els.sessionModelSelect.value,
       }),
     });
   });
@@ -563,7 +628,12 @@
       method: "PUT",
       body: JSON.stringify(payload),
     });
+    state.providerModelsCache = {};
     await loadConfig();
+    const active = getActiveSession();
+    if (active) {
+      await fetchModelsForProvider(active.provider, true);
+    }
     els.settingsSaveMsg.textContent = "Saved!";
   });
 

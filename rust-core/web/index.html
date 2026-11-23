@@ -34,29 +34,8 @@
 
       <!-- Chatbot Interface -->
       <section class="chat-pane">
-        <div class="chat-header">
-          <div class="session-config">
-            <label>
-              <span>Provider</span>
-              <select id="session-provider">
-                <option value="claude">Claude (Anthropic)</option>
-                <option value="gemini">Gemini (Google)</option>
-                <option value="grok">Grok (xAI)</option>
-                <option value="openai">OpenAI</option>
-              </select>
-            </label>
-            <label>
-              <span>Model</span>
-              <select id="session-model-select"></select>
-            </label>
-            <label class="custom-model-wrap">
-              <span>Custom / Active Model</span>
-              <input type="text" id="session-model-input" placeholder="model id" />
-            </label>
-          </div>
-          <div class="key-warning hidden" id="key-warning">
-            API key not set for selected provider. <button class="link-btn" id="btn-warn-settings">Configure in Settings</button>
-          </div>
+        <div class="key-warning hidden" id="key-warning">
+          API key not set for selected provider. <button class="link-btn" id="btn-warn-settings">Configure in Settings</button>
         </div>
 
         <div class="chat-messages" id="chat-messages"></div>
@@ -68,8 +47,23 @@
         </div>
 
         <form class="chat-input-bar" id="chat-form">
-          <textarea id="chat-input" rows="2" placeholder="Tell the agent what to do on your Android device... (Enter to send, Shift+Enter for newline)"></textarea>
-          <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
+          <div class="composer-box">
+            <textarea id="chat-input" rows="2" placeholder="Tell the agent what to do on your Android device... (Enter to send, Shift+Enter for newline)"></textarea>
+            <div class="composer-footer">
+              <div class="model-controls">
+                <select id="session-provider" aria-label="AI Provider">
+                  <option value="claude">Claude</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="grok">Grok</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+                <select id="session-model-select" aria-label="AI Model"></select>
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-refresh-models" title="Refresh models from provider API">&#8635;</button>
+                <span class="model-source-hint" id="model-source-hint"></span>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm" id="btn-send">Send</button>
+            </div>
+          </div>
         </form>
       </section>
 

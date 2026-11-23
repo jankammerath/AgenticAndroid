@@ -208,7 +208,7 @@ fi
 
 echo "==> [5/5] Forwarding port $PORT and launching Agentic Android..."
 "$ADB" forward "tcp:$PORT" "tcp:$PORT"
-"$ADB" shell am start -n com.agenticandroid/.MainActivity --ez auto_start true --ei port "$PORT"
+"$ADB" shell am start -S -n com.agenticandroid/.MainActivity --ez auto_start true --ei port "$PORT"
 
 echo "    Waiting for Rust webserver on http://localhost:$PORT ..."
 for _ in $(seq 1 20); do

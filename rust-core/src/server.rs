@@ -1,5 +1,6 @@
 use crate::agent::{execute_device_tool, run_agent_turn};
 use crate::bridge::DeviceBridge;
+use crate::llm::fetch_provider_models;
 use crate::state::{AppState, Provider, Session};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
@@ -45,6 +46,7 @@ pub async fn start_http_server(
         .route("/api/status", get(api_status))
         .route("/api/config", get(api_get_config).put(api_update_config))
         .route("/api/providers", get(api_providers))
+        .route("/api/providers/:provider/models", get(api_provider_models))
         .route("/api/sessions", get(api_list_sessions).post(api_create_session))
         .route(
             "/api/sessions/:id",
@@ -152,6 +154,47 @@ async fn api_providers() -> Json<Value> {
             }
         ]
     }))
+}
+
+async fn api_provider_models(
+    State(ctx): State<ServerCtx>,
+    Path(provider_str): Path<String>,
+) -> Result<Json<Value>, StatusCode> {
+    let provider = match provider_str.to_lowercase().as_str() {
+        "claude" => Provider::Claude,
+        "gemini" => Provider::Gemini,
+        "grok" => Provider::Grok,
+        "openai" => Provider::OpenAI,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    let api_key = {
+        let cfg = ctx.state.config.read().await;
+        cfg.api_keys.get(&provider).to_string()
+    };
+
+    match fetch_provider_models(&ctx.state.http_client, &provider, &api_key).await {
+        Ok(models) if !models.is_empty() => Ok(Json(json!({
+            "ok": true,
+            "source": "api",
+            "provider": provider,
+            "models": models
+        }))),
+        Ok(_) => Ok(Json(json!({
+            "ok": false,
+            "source": "fallback",
+            "provider": provider,
+            "error": "Provider returned an empty model list.",
+            "models": [provider.default_model()]
+        }))),
+        Err(err) => Ok(Json(json!({
+            "ok": false,
+            "source": "fallback",
+            "provider": provider,
+            "error": err,
+            "models": [provider.default_model()]
+        }))),
+    }
 }
 
 #[derive(Serialize)]
