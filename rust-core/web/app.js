@@ -477,6 +477,9 @@
       const accEnabled = !!st.device?.accessibility_enabled;
       els.badgeAccessibility.className = `status-pill ${accEnabled ? "ok" : "warn"}`;
       els.badgeAccessibility.querySelector(".label").textContent = accEnabled ? "Accessibility" : "Accessibility Off";
+      if (st.device?.device_name) {
+        document.title = `${st.device.device_name} (Agentic Android)`;
+      }
       if (st.device?.screen_width && st.device?.screen_height) {
         state.deviceWidth = st.device.screen_width;
         state.deviceHeight = st.device.screen_height;

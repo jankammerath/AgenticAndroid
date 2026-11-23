@@ -85,8 +85,21 @@ pub async fn start_http_server(
         .map_err(|e| format!("Server error: {e}"))
 }
 
-async fn serve_index() -> Html<&'static str> {
-    Html(INDEX_HTML)
+async fn serve_index(State(ctx): State<ServerCtx>) -> Html<String> {
+    let status = ctx.bridge.get_status().await;
+    let html = if let Some(name) = status["device_name"].as_str().filter(|s| !s.trim().is_empty()) {
+        let escaped = name
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        INDEX_HTML.replace(
+            "<title>Agentic Android</title>",
+            &format!("<title>{escaped} (Agentic Android)</title>"),
+        )
+    } else {
+        INDEX_HTML.to_string()
+    };
+    Html(html)
 }
 
 async fn serve_css() -> Response {

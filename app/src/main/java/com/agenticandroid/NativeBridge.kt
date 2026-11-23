@@ -1,5 +1,7 @@
 package com.agenticandroid
 
+import android.os.Build
+import android.provider.Settings
 import org.json.JSONObject
 
 object NativeBridge {
@@ -14,6 +16,25 @@ object NativeBridge {
     external fun nativePushVideoFrame(jpegBytes: ByteArray, width: Int, height: Int)
     external fun nativePushAudioPcm(pcmBytes: ByteArray, sampleRate: Int, channels: Int)
 
+    private fun resolveDeviceName(service: AgentAccessibilityService?): String {
+        val globalName = try {
+            service?.let {
+                Settings.Global.getString(it.contentResolver, Settings.Global.DEVICE_NAME)
+            }?.trim()
+        } catch (_: Throwable) {
+            null
+        }
+        if (!globalName.isNullOrEmpty()) return globalName
+
+        val model = Build.MODEL?.trim().orEmpty()
+        val manufacturer = Build.MANUFACTURER?.trim().orEmpty()
+        return when {
+            model.isEmpty() -> "Android Device"
+            manufacturer.isEmpty() || model.startsWith(manufacturer, ignoreCase = true) -> model
+            else -> "$manufacturer $model"
+        }
+    }
+
     fun dispatchAction(actionJson: String): String {
         return try {
             val req = JSONObject(actionJson)
@@ -27,6 +48,7 @@ object NativeBridge {
                     put("ok", true)
                     put("accessibility_enabled", service != null)
                     put("media_cast_active", AgentForegroundService.isMediaCastActive)
+                    put("device_name", resolveDeviceName(service))
                     put("screen_width", dims.first)
                     put("screen_height", dims.second)
                 }.toString()
