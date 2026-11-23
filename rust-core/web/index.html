@@ -12,13 +12,16 @@
       <div class="brand">
         <div class="brand-dot"></div>
         <h1>Agentic Android</h1>
-        <span class="badge badge-muted" id="badge-rust">Rust Core</span>
       </div>
       <div class="topbar-status">
-        <span class="badge" id="badge-accessibility">Accessibility: Checking...</span>
-        <span class="badge" id="badge-video">Screen: Connecting...</span>
-        <button class="btn btn-secondary btn-sm" id="btn-audio-toggle">Audio: Off</button>
-        <button class="btn btn-primary btn-sm" id="btn-open-settings">Settings</button>
+        <span class="status-pill" id="badge-accessibility" title="Accessibility Service Status">
+          <span class="dot"></span><span class="label">Accessibility</span>
+        </span>
+        <span class="status-pill" id="badge-video" title="Live Screen Stream Status">
+          <span class="dot"></span><span class="label">Screen</span>
+        </span>
+        <button class="pill-btn" id="btn-audio-toggle">Audio Off</button>
+        <button class="pill-btn pill-btn-accent" id="btn-open-settings">Settings</button>
       </div>
     </header>
 
@@ -26,8 +29,8 @@
       <!-- Sessions Sidebar -->
       <aside class="sidebar">
         <div class="sidebar-header">
-          <h2>Sessions</h2>
-          <button class="btn btn-primary btn-xs" id="btn-new-session">+ New</button>
+          <span class="section-label">Sessions</span>
+          <button class="icon-pill-btn" id="btn-new-session" title="New Session">+ New</button>
         </div>
         <div class="session-list" id="session-list"></div>
       </aside>
@@ -40,66 +43,68 @@
 
         <div class="chat-messages" id="chat-messages"></div>
 
-        <div class="agent-activity hidden" id="agent-activity">
-          <div class="spinner"></div>
-          <span id="agent-activity-text">Working...</span>
-          <button class="btn btn-danger btn-xs" id="btn-stop-agent">Stop</button>
-        </div>
-
-        <form class="chat-input-bar" id="chat-form">
-          <div class="composer-box">
-            <textarea id="chat-input" rows="2" placeholder="Tell the agent what to do on your Android device... (Enter to send, Shift+Enter for newline)"></textarea>
-            <div class="composer-footer">
-              <div class="model-controls">
-                <select id="session-provider" aria-label="AI Provider">
-                  <option value="claude">Claude</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="grok">Grok</option>
-                  <option value="openai">OpenAI</option>
-                </select>
-                <select id="session-model-select" aria-label="AI Model"></select>
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-refresh-models" title="Refresh models from provider API">&#8635;</button>
-                <span class="model-source-hint" id="model-source-hint"></span>
-              </div>
-              <button type="submit" class="btn btn-primary btn-sm" id="btn-send">Send</button>
-            </div>
+        <div class="composer-wrap">
+          <div class="agent-activity hidden" id="agent-activity">
+            <div class="spinner"></div>
+            <span id="agent-activity-text">Working...</span>
+            <button class="pill-btn pill-btn-danger" id="btn-stop-agent">Stop</button>
           </div>
-        </form>
+
+          <form class="chat-input-bar" id="chat-form">
+            <div class="composer-box">
+              <textarea id="chat-input" rows="2" placeholder="Ask Agentic Android to do something..."></textarea>
+              <div class="composer-footer">
+                <div class="model-controls">
+                  <select id="session-provider" aria-label="AI Provider">
+                    <option value="claude">Claude</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="grok">Grok</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                  <select id="session-model-select" aria-label="AI Model"></select>
+                  <button type="button" class="ghost-icon-btn" id="btn-refresh-models" title="Refresh models from provider API">&#8635;</button>
+                  <span class="model-source-hint" id="model-source-hint"></span>
+                </div>
+                <button type="submit" class="send-btn" id="btn-send">Send</button>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
 
       <!-- Live Device Screen & Controls -->
       <section class="device-pane">
         <div class="device-header">
-          <h2>Live Device Screen</h2>
-          <span class="device-dims" id="device-dims">-- × --</span>
+          <span class="section-label">Live Screen</span>
+          <div class="device-header-right">
+            <span class="device-dims" id="device-dims">-- &times; --</span>
+            <button class="ghost-icon-btn" id="btn-refresh-frame" title="Refresh frame">&#8635;</button>
+            <button class="ghost-icon-btn" id="btn-inspect-ui" title="Inspect UI Tree">{ }</button>
+          </div>
         </div>
 
         <div class="screen-stage" id="screen-stage">
-          <img id="screen-img" alt="Live Android screen" draggable="false" />
-          <div class="screen-placeholder" id="screen-placeholder">
-            <p>Waiting for live device stream...</p>
-            <small>Enable Accessibility Service or start Screen Cast in the Android app.</small>
+          <div class="phone-frame">
+            <img id="screen-img" alt="Live Android screen" draggable="false" />
+            <div class="screen-placeholder" id="screen-placeholder">
+              <p>Waiting for stream...</p>
+              <small>Click or drag once connected</small>
+            </div>
+            <div class="touch-ripple hidden" id="touch-ripple"></div>
           </div>
-          <div class="touch-ripple hidden" id="touch-ripple"></div>
         </div>
 
         <div class="device-controls">
-          <div class="control-row">
-            <button class="btn btn-secondary btn-sm" data-global="back">Back</button>
-            <button class="btn btn-secondary btn-sm" data-global="home">Home</button>
-            <button class="btn btn-secondary btn-sm" data-global="recents">Recents</button>
-            <button class="btn btn-secondary btn-sm" data-global="notifications">Notifs</button>
-          </div>
-          <div class="control-row">
-            <button class="btn btn-secondary btn-xs" id="btn-refresh-frame">Refresh Frame</button>
-            <button class="btn btn-secondary btn-xs" id="btn-inspect-ui">UI Tree</button>
-            <button class="btn btn-secondary btn-xs" data-global="quick_settings">Quick Settings</button>
+          <div class="nav-pill-row">
+            <button class="nav-pill" data-global="back">Back</button>
+            <button class="nav-pill" data-global="home">Home</button>
+            <button class="nav-pill" data-global="recents">Recents</button>
+            <button class="nav-pill" data-global="notifications">Notifs</button>
           </div>
           <form class="quick-type-row" id="quick-type-form">
-            <input type="text" id="quick-type-input" placeholder="Type text into focused field..." />
-            <button type="submit" class="btn btn-secondary btn-xs">Type</button>
+            <input type="text" id="quick-type-input" placeholder="Type into focused field..." />
+            <button type="submit" class="nav-pill">Type</button>
           </form>
-          <p class="hint">Tip: Click the screen to tap, or drag to swipe directly.</p>
         </div>
       </section>
     </main>
@@ -109,29 +114,29 @@
   <div class="modal-backdrop hidden" id="settings-modal">
     <div class="modal">
       <div class="modal-header">
-        <h2>Settings &amp; AI Providers</h2>
-        <button class="btn btn-secondary btn-xs" id="btn-close-settings">Close</button>
+        <h2>Settings</h2>
+        <button class="ghost-icon-btn" id="btn-close-settings">&times;</button>
       </div>
       <form id="settings-form" class="modal-body">
         <p class="modal-desc">
-          Enter API keys for one or more providers. You can switch provider and model independently for each chat session.
+          Add API keys for any providers you want to use. Switch provider and model per session right from the prompt box.
         </p>
 
         <div class="provider-grid">
           <div class="field">
-            <label for="key-claude">Claude (Anthropic) API Key <span class="key-status" id="status-claude"></span></label>
+            <label for="key-claude">Claude (Anthropic) <span class="key-status" id="status-claude"></span></label>
             <input type="password" id="key-claude" placeholder="sk-ant-..." autocomplete="off" />
           </div>
           <div class="field">
-            <label for="key-gemini">Gemini (Google) API Key <span class="key-status" id="status-gemini"></span></label>
+            <label for="key-gemini">Gemini (Google) <span class="key-status" id="status-gemini"></span></label>
             <input type="password" id="key-gemini" placeholder="AIza..." autocomplete="off" />
           </div>
           <div class="field">
-            <label for="key-grok">Grok (xAI) API Key <span class="key-status" id="status-grok"></span></label>
+            <label for="key-grok">Grok (xAI) <span class="key-status" id="status-grok"></span></label>
             <input type="password" id="key-grok" placeholder="xai-..." autocomplete="off" />
           </div>
           <div class="field">
-            <label for="key-openai">OpenAI API Key <span class="key-status" id="status-openai"></span></label>
+            <label for="key-openai">OpenAI <span class="key-status" id="status-openai"></span></label>
             <input type="password" id="key-openai" placeholder="sk-..." autocomplete="off" />
           </div>
         </div>
@@ -147,7 +152,7 @@
             </select>
           </div>
           <div class="field">
-            <label for="cfg-max-steps">Max Agent Steps</label>
+            <label for="cfg-max-steps">Max Steps</label>
             <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
           </div>
           <div class="field">
@@ -159,7 +164,7 @@
         <div class="field checkbox-field">
           <label>
             <input type="checkbox" id="cfg-include-screenshot" checked />
-            Send live device screenshot with each agent step (recommended for vision models)
+            Send live device screenshot with each agent step
           </label>
         </div>
 
@@ -170,7 +175,7 @@
 
         <div class="modal-footer">
           <span class="save-msg" id="settings-save-msg"></span>
-          <button type="submit" class="btn btn-primary">Save Settings</button>
+          <button type="submit" class="send-btn">Save Changes</button>
         </div>
       </form>
     </div>
@@ -180,8 +185,8 @@
   <div class="modal-backdrop hidden" id="uitree-modal">
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h2>Android Accessibility UI Tree</h2>
-        <button class="btn btn-secondary btn-xs" id="btn-close-uitree">Close</button>
+        <h2>Accessibility UI Tree</h2>
+        <button class="ghost-icon-btn" id="btn-close-uitree">&times;</button>
       </div>
       <div class="modal-body">
         <pre id="uitree-pre" class="code-box">Loading...</pre>

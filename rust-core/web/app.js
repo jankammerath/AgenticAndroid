@@ -187,6 +187,11 @@
     }
   }
 
+  function formatContent(text) {
+    const escaped = escapeHtml(text || "");
+    return escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
+  }
+
   function renderMessages() {
     const session = getActiveSession();
     els.chatMessages.innerHTML = "";
@@ -194,11 +199,8 @@
 
     if (session.messages.length === 0) {
       const empty = document.createElement("div");
-      empty.className = "msg assistant";
-      empty.innerHTML = `
-        <div class="msg-role">Agentic Android</div>
-        Ready to control your Android device. Select your preferred AI provider &amp; model above, and describe a task.
-      `;
+      empty.className = "msg welcome";
+      empty.innerHTML = `<h3>Agentic Android</h3><p>Describe what you want done on your device, or interact with the live screen on the right.</p>`;
       els.chatMessages.appendChild(empty);
       return;
     }
@@ -216,13 +218,9 @@
               )})<br/>→ ${escapeHtml(t.result)}</div>`
           )
           .join("");
-        tracesHtml = `<details class="traces"><summary>${m.tool_traces.length} device action(s)</summary>${items}</details>`;
+        tracesHtml = `<details class="traces"><summary>${m.tool_traces.length} device action${m.tool_traces.length === 1 ? "" : "s"}</summary><div class="trace-list">${items}</div></details>`;
       }
-      div.innerHTML = `
-        <div class="msg-role">${m.role === "user" ? "You" : "Agent"}</div>
-        <div>${escapeHtml(m.content)}</div>
-        ${tracesHtml}
-      `;
+      div.innerHTML = `<div class="msg-body">${formatContent(m.content)}</div>${tracesHtml}`;
       els.chatMessages.appendChild(div);
     }
     els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
@@ -270,16 +268,16 @@
     try {
       const st = await api("/api/status");
       const accEnabled = !!st.device?.accessibility_enabled;
-      els.badgeAccessibility.textContent = accEnabled ? "Accessibility: Active" : "Accessibility: Off";
-      els.badgeAccessibility.className = `badge ${accEnabled ? "ok" : "warn"}`;
+      els.badgeAccessibility.className = `status-pill ${accEnabled ? "ok" : "warn"}`;
+      els.badgeAccessibility.querySelector(".label").textContent = accEnabled ? "Accessibility" : "Accessibility Off";
       if (st.device?.screen_width && st.device?.screen_height) {
         state.deviceWidth = st.device.screen_width;
         state.deviceHeight = st.device.screen_height;
         els.deviceDims.textContent = `${state.deviceWidth} × ${state.deviceHeight}`;
       }
     } catch {
-      els.badgeAccessibility.textContent = "Server: Disconnected";
-      els.badgeAccessibility.className = "badge warn";
+      els.badgeAccessibility.className = "status-pill warn";
+      els.badgeAccessibility.querySelector(".label").textContent = "Disconnected";
     }
   }
 
@@ -290,8 +288,8 @@
     state.videoWs = ws;
 
     ws.onopen = () => {
-      els.badgeVideo.textContent = "Screen: Connected";
-      els.badgeVideo.className = "badge ok";
+      els.badgeVideo.className = "status-pill ok";
+      els.badgeVideo.querySelector(".label").textContent = "Screen";
     };
 
     ws.onmessage = (ev) => {
@@ -315,8 +313,8 @@
     };
 
     ws.onclose = () => {
-      els.badgeVideo.textContent = "Screen: Reconnecting...";
-      els.badgeVideo.className = "badge warn";
+      els.badgeVideo.className = "status-pill warn";
+      els.badgeVideo.querySelector(".label").textContent = "Reconnecting";
       setTimeout(connectVideoWs, 2000);
     };
   }
@@ -328,12 +326,12 @@
         state.audioWs.close();
         state.audioWs = null;
       }
-      els.btnAudioToggle.textContent = "Audio: Off";
+      els.btnAudioToggle.textContent = "Audio Off";
       return;
     }
 
     state.audioEnabled = true;
-    els.btnAudioToggle.textContent = "Audio: On";
+    els.btnAudioToggle.textContent = "Audio On";
     if (!state.audioCtx) {
       state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
