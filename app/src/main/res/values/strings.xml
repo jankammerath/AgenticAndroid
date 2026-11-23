@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Agentic Android</string>
+    <string name="accessibility_service_label">Agentic Android Control</string>
+    <string name="accessibility_service_description">Allows the Agentic Android Rust core and your configured AI agent to observe the screen and perform taps, swipes, text input, and navigation actions.</string>
+</resources>

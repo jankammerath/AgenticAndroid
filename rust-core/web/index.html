@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Android</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-dot"></div>
+        <h1>Agentic Android</h1>
+        <span class="badge badge-muted" id="badge-rust">Rust Core</span>
+      </div>
+      <div class="topbar-status">
+        <span class="badge" id="badge-accessibility">Accessibility: Checking...</span>
+        <span class="badge" id="badge-video">Screen: Connecting...</span>
+        <button class="btn btn-secondary btn-sm" id="btn-audio-toggle">Audio: Off</button>
+        <button class="btn btn-primary btn-sm" id="btn-open-settings">Settings</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <!-- Sessions Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>Sessions</h2>
+          <button class="btn btn-primary btn-xs" id="btn-new-session">+ New</button>
+        </div>
+        <div class="session-list" id="session-list"></div>
+      </aside>
+
+      <!-- Chatbot Interface -->
+      <section class="chat-pane">
+        <div class="chat-header">
+          <div class="session-config">
+            <label>
+              <span>Provider</span>
+              <select id="session-provider">
+                <option value="claude">Claude (Anthropic)</option>
+                <option value="gemini">Gemini (Google)</option>
+                <option value="grok">Grok (xAI)</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </label>
+            <label>
+              <span>Model</span>
+              <select id="session-model-select"></select>
+            </label>
+            <label class="custom-model-wrap">
+              <span>Custom / Active Model</span>
+              <input type="text" id="session-model-input" placeholder="model id" />
+            </label>
+          </div>
+          <div class="key-warning hidden" id="key-warning">
+            API key not set for selected provider. <button class="link-btn" id="btn-warn-settings">Configure in Settings</button>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages"></div>
+
+        <div class="agent-activity hidden" id="agent-activity">
+          <div class="spinner"></div>
+          <span id="agent-activity-text">Working...</span>
+          <button class="btn btn-danger btn-xs" id="btn-stop-agent">Stop</button>
+        </div>
+
+        <form class="chat-input-bar" id="chat-form">
+          <textarea id="chat-input" rows="2" placeholder="Tell the agent what to do on your Android device... (Enter to send, Shift+Enter for newline)"></textarea>
+          <button type="submit" class="btn btn-primary" id="btn-send">Send</button>
+        </form>
+      </section>
+
+      <!-- Live Device Screen & Controls -->
+      <section class="device-pane">
+        <div class="device-header">
+          <h2>Live Device Screen</h2>
+          <span class="device-dims" id="device-dims">-- × --</span>
+        </div>
+
+        <div class="screen-stage" id="screen-stage">
+          <img id="screen-img" alt="Live Android screen" draggable="false" />
+          <div class="screen-placeholder" id="screen-placeholder">
+            <p>Waiting for live device stream...</p>
+            <small>Enable Accessibility Service or start Screen Cast in the Android app.</small>
+          </div>
+          <div class="touch-ripple hidden" id="touch-ripple"></div>
+        </div>
+
+        <div class="device-controls">
+          <div class="control-row">
+            <button class="btn btn-secondary btn-sm" data-global="back">Back</button>
+            <button class="btn btn-secondary btn-sm" data-global="home">Home</button>
+            <button class="btn btn-secondary btn-sm" data-global="recents">Recents</button>
+            <button class="btn btn-secondary btn-sm" data-global="notifications">Notifs</button>
+          </div>
+          <div class="control-row">
+            <button class="btn btn-secondary btn-xs" id="btn-refresh-frame">Refresh Frame</button>
+            <button class="btn btn-secondary btn-xs" id="btn-inspect-ui">UI Tree</button>
+            <button class="btn btn-secondary btn-xs" data-global="quick_settings">Quick Settings</button>
+          </div>
+          <form class="quick-type-row" id="quick-type-form">
+            <input type="text" id="quick-type-input" placeholder="Type text into focused field..." />
+            <button type="submit" class="btn btn-secondary btn-xs">Type</button>
+          </form>
+          <p class="hint">Tip: Click the screen to tap, or drag to swipe directly.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop hidden" id="settings-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Settings &amp; AI Providers</h2>
+        <button class="btn btn-secondary btn-xs" id="btn-close-settings">Close</button>
+      </div>
+      <form id="settings-form" class="modal-body">
+        <p class="modal-desc">
+          Enter API keys for one or more providers. You can switch provider and model independently for each chat session.
+        </p>
+
+        <div class="provider-grid">
+          <div class="field">
+            <label for="key-claude">Claude (Anthropic) API Key <span class="key-status" id="status-claude"></span></label>
+            <input type="password" id="key-claude" placeholder="sk-ant-..." autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="key-gemini">Gemini (Google) API Key <span class="key-status" id="status-gemini"></span></label>
+            <input type="password" id="key-gemini" placeholder="AIza..." autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="key-grok">Grok (xAI) API Key <span class="key-status" id="status-grok"></span></label>
+            <input type="password" id="key-grok" placeholder="xai-..." autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="key-openai">OpenAI API Key <span class="key-status" id="status-openai"></span></label>
+            <input type="password" id="key-openai" placeholder="sk-..." autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <div class="field">
+            <label for="cfg-default-provider">Default Provider</label>
+            <select id="cfg-default-provider">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+              <option value="grok">Grok (xAI)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cfg-max-steps">Max Agent Steps</label>
+            <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
+          </div>
+          <div class="field">
+            <label for="cfg-step-delay">Step Delay (ms)</label>
+            <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
+          </div>
+        </div>
+
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="cfg-include-screenshot" checked />
+            Send live device screenshot with each agent step (recommended for vision models)
+          </label>
+        </div>
+
+        <div class="field">
+          <label for="cfg-system-prompt">System Prompt</label>
+          <textarea id="cfg-system-prompt" rows="4"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <span class="save-msg" id="settings-save-msg"></span>
+          <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- UI Tree Modal -->
+  <div class="modal-backdrop hidden" id="uitree-modal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Android Accessibility UI Tree</h2>
+        <button class="btn btn-secondary btn-xs" id="btn-close-uitree">Close</button>
+      </div>
+      <div class="modal-body">
+        <pre id="uitree-pre" class="code-box">Loading...</pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
