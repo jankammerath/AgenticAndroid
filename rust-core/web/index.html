@@ -97,14 +97,29 @@
 
         <div class="device-controls">
           <div class="nav-pill-row">
-            <button class="nav-pill" data-global="back">Back</button>
-            <button class="nav-pill" data-global="home">Home</button>
-            <button class="nav-pill" data-global="recents">Recents</button>
-            <button class="nav-pill" data-global="notifications">Notifs</button>
+            <button class="nav-pill" data-global="back" title="Back">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+              <span>Back</span>
+            </button>
+            <button class="nav-pill" data-global="home" title="Home">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
+              <span>Home</span>
+            </button>
+            <button class="nav-pill" data-global="recents" title="Recents">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>
+              <span>Recents</span>
+            </button>
+            <button class="nav-pill" data-global="notifications" title="Notifications">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span>Notifs</span>
+            </button>
           </div>
           <form class="quick-type-row" id="quick-type-form">
             <input type="text" id="quick-type-input" placeholder="Type into focused field..." />
-            <button type="submit" class="nav-pill">Type</button>
+            <button type="submit" class="nav-pill nav-pill-type" title="Type text">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>
+              <span>Type</span>
+            </button>
           </form>
         </div>
       </section>
@@ -113,70 +128,85 @@
 
   <!-- Settings Modal -->
   <div class="modal-backdrop hidden" id="settings-modal">
-    <div class="modal">
+    <div class="modal modal-settings">
       <div class="modal-header">
         <h2>Settings</h2>
         <button class="ghost-icon-btn" id="btn-close-settings">&times;</button>
       </div>
-      <form id="settings-form" class="modal-body">
+
+      <div class="modal-tabs" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">Agent Keys</button>
+        <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">System Prompt</button>
+      </div>
+
+      <!-- Tab 1: Agent Keys & Agent Behavior -->
+      <div class="modal-body tab-panel" id="tab-panel-keys">
         <p class="modal-desc">
-          Add API keys for any providers you want to use. Switch provider and model per session right from the prompt box.
+          Manage API keys for AI providers. Switch provider and model per session directly from the prompt box.
         </p>
 
-        <div class="provider-grid">
-          <div class="field">
-            <label for="key-claude">Claude (Anthropic) <span class="key-status" id="status-claude"></span></label>
-            <input type="password" id="key-claude" placeholder="sk-ant-..." autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="key-gemini">Gemini (Google) <span class="key-status" id="status-gemini"></span></label>
-            <input type="password" id="key-gemini" placeholder="AIza..." autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="key-grok">Grok (xAI) <span class="key-status" id="status-grok"></span></label>
-            <input type="password" id="key-grok" placeholder="xai-..." autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="key-openai">OpenAI <span class="key-status" id="status-openai"></span></label>
-            <input type="password" id="key-openai" placeholder="sk-..." autocomplete="off" />
-          </div>
-        </div>
+        <div class="keys-list" id="configured-keys-list"></div>
 
-        <div class="settings-row">
-          <div class="field">
-            <label for="cfg-default-provider">Default Provider</label>
-            <select id="cfg-default-provider">
+        <form class="add-key-card" id="add-key-form">
+          <div class="add-key-row">
+            <select id="add-key-provider" aria-label="Provider">
               <option value="claude">Claude (Anthropic)</option>
               <option value="gemini">Gemini (Google)</option>
               <option value="grok">Grok (xAI)</option>
               <option value="openai">OpenAI</option>
             </select>
+            <input type="password" id="add-key-input" placeholder="Paste API key..." autocomplete="off" />
+            <button type="submit" class="send-btn">Add Key</button>
           </div>
-          <div class="field">
-            <label for="cfg-max-steps">Max Steps</label>
-            <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
-          </div>
-          <div class="field">
-            <label for="cfg-step-delay">Step Delay (ms)</label>
-            <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
-          </div>
-        </div>
+        </form>
 
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" id="cfg-include-screenshot" checked />
-            Send live device screenshot with each agent step
-          </label>
-        </div>
+        <form id="settings-behavior-form" class="behavior-section">
+          <div class="settings-row">
+            <div class="field">
+              <label for="cfg-default-provider">Default Provider</label>
+              <select id="cfg-default-provider">
+                <option value="claude">Claude (Anthropic)</option>
+                <option value="gemini">Gemini (Google)</option>
+                <option value="grok">Grok (xAI)</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cfg-max-steps">Max Steps</label>
+              <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
+            </div>
+            <div class="field">
+              <label for="cfg-step-delay">Step Delay (ms)</label>
+              <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
+            </div>
+          </div>
 
-        <div class="field">
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" id="cfg-include-screenshot" checked />
+              Send live device screenshot with each agent step
+            </label>
+          </div>
+
+          <div class="modal-footer">
+            <span class="save-msg" id="settings-save-msg"></span>
+            <button type="submit" class="send-btn">Save Settings</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 2: System Prompt -->
+      <form class="modal-body tab-panel hidden" id="tab-panel-prompt">
+        <p class="modal-desc">
+          Customize the system instructions given to the AI agent before it controls your Android device.
+        </p>
+        <div class="field prompt-field">
           <label for="cfg-system-prompt">System Prompt</label>
-          <textarea id="cfg-system-prompt" rows="4"></textarea>
+          <textarea id="cfg-system-prompt" rows="14" placeholder="Enter system prompt instructions..."></textarea>
         </div>
-
         <div class="modal-footer">
-          <span class="save-msg" id="settings-save-msg"></span>
-          <button type="submit" class="send-btn">Save Changes</button>
+          <span class="save-msg" id="prompt-save-msg"></span>
+          <button type="submit" class="send-btn">Save Prompt</button>
         </div>
       </form>
     </div>

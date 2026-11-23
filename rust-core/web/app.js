@@ -48,8 +48,15 @@
     quickTypeForm: document.getElementById("quick-type-form"),
     quickTypeInput: document.getElementById("quick-type-input"),
     settingsModal: document.getElementById("settings-modal"),
-    settingsForm: document.getElementById("settings-form"),
+    addKeyForm: document.getElementById("add-key-form"),
+    addKeyProvider: document.getElementById("add-key-provider"),
+    addKeyInput: document.getElementById("add-key-input"),
+    configuredKeysList: document.getElementById("configured-keys-list"),
+    settingsBehaviorForm: document.getElementById("settings-behavior-form"),
     settingsSaveMsg: document.getElementById("settings-save-msg"),
+    tabPanelKeys: document.getElementById("tab-panel-keys"),
+    tabPanelPrompt: document.getElementById("tab-panel-prompt"),
+    promptSaveMsg: document.getElementById("prompt-save-msg"),
     uitreeModal: document.getElementById("uitree-modal"),
     btnCloseUitree: document.getElementById("btn-close-uitree"),
     uitreePre: document.getElementById("uitree-pre"),
@@ -399,13 +406,55 @@
     updateKeyWarning();
   }
 
+  const PROVIDER_LABELS = {
+    claude: "Claude (Anthropic)",
+    gemini: "Gemini (Google)",
+    grok: "Grok (xAI)",
+    openai: "OpenAI",
+  };
+
+  function renderConfiguredKeys() {
+    const masked = state.config?.api_keys_masked || {};
+    const configured = ["claude", "gemini", "grok", "openai"].filter((id) => !!masked[id]);
+    els.configuredKeysList.innerHTML = "";
+
+    if (configured.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "keys-empty";
+      empty.textContent = "No provider API keys added yet. Select a provider below to add one.";
+      els.configuredKeysList.appendChild(empty);
+      return;
+    }
+
+    for (const id of configured) {
+      const row = document.createElement("div");
+      row.className = "key-row";
+      row.innerHTML = `
+        <div class="key-row-info">
+          <span class="key-row-name">${escapeHtml(PROVIDER_LABELS[id] || id)}</span>
+          <span class="key-row-mask">${escapeHtml(masked[id])}</span>
+        </div>
+        <button type="button" class="pill-btn pill-btn-danger">Remove</button>
+      `;
+      row.querySelector("button").addEventListener("click", async () => {
+        await api("/api/config", {
+          method: "PUT",
+          body: JSON.stringify({ api_keys: { [id]: "" } }),
+        });
+        state.providerModelsCache = {};
+        await loadConfig();
+        const active = getActiveSession();
+        if (active && active.provider === id) {
+          await fetchModelsForProvider(id, true);
+        }
+      });
+      els.configuredKeysList.appendChild(row);
+    }
+  }
+
   async function loadConfig() {
     state.config = await api("/api/config");
-    const masked = state.config.api_keys_masked || {};
-    for (const id of ["claude", "gemini", "grok", "openai"]) {
-      const el = document.getElementById(`status-${id}`);
-      if (el) el.textContent = masked[id] ? `Saved (${masked[id]})` : "Not set";
-    }
+    renderConfiguredKeys();
     document.getElementById("cfg-default-provider").value = state.config.default_provider;
     document.getElementById("cfg-max-steps").value = state.config.max_agent_steps;
     document.getElementById("cfg-step-delay").value = state.config.step_delay_ms;
@@ -749,40 +798,41 @@
 
   els.btnAudioToggle.addEventListener("click", toggleAudio);
 
-  // Settings modal
+  // Settings modal & tabs
+  const setSettingsTab = (tabName) => {
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      const active = btn.getAttribute("data-tab") === tabName;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
+    els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
+  };
+
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setSettingsTab(btn.getAttribute("data-tab")));
+  });
+
   const openSettings = () => {
     els.settingsSaveMsg.textContent = "";
+    els.promptSaveMsg.textContent = "";
+    setSettingsTab("keys");
     els.settingsModal.classList.remove("hidden");
   };
   els.btnOpenSettings.addEventListener("click", openSettings);
   els.btnWarnSettings.addEventListener("click", openSettings);
   els.btnCloseSettings.addEventListener("click", () => els.settingsModal.classList.add("hidden"));
 
-  els.settingsForm.addEventListener("submit", async (e) => {
+  els.addKeyForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const keyPatch = {};
-    for (const id of ["claude", "gemini", "grok", "openai"]) {
-      const input = document.getElementById(`key-${id}`);
-      if (input.value.trim() !== "") {
-        keyPatch[id] = input.value.trim();
-        input.value = "";
-      }
-    }
-
-    const payload = {
-      default_provider: document.getElementById("cfg-default-provider").value,
-      max_agent_steps: parseInt(document.getElementById("cfg-max-steps").value, 10) || 15,
-      step_delay_ms: parseInt(document.getElementById("cfg-step-delay").value, 10) || 600,
-      include_screenshot: document.getElementById("cfg-include-screenshot").checked,
-      system_prompt: document.getElementById("cfg-system-prompt").value,
-    };
-    if (Object.keys(keyPatch).length > 0) {
-      payload.api_keys = keyPatch;
-    }
+    const provider = els.addKeyProvider.value;
+    const key = els.addKeyInput.value.trim();
+    if (!key) return;
+    els.addKeyInput.value = "";
 
     await api("/api/config", {
       method: "PUT",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ api_keys: { [provider]: key } }),
     });
     state.providerModelsCache = {};
     await loadConfig();
@@ -790,7 +840,34 @@
     if (active) {
       await fetchModelsForProvider(active.provider, true);
     }
+    els.settingsSaveMsg.textContent = `${PROVIDER_LABELS[provider] || provider} key saved!`;
+  });
+
+  els.settingsBehaviorForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      default_provider: document.getElementById("cfg-default-provider").value,
+      max_agent_steps: parseInt(document.getElementById("cfg-max-steps").value, 10) || 15,
+      step_delay_ms: parseInt(document.getElementById("cfg-step-delay").value, 10) || 600,
+      include_screenshot: document.getElementById("cfg-include-screenshot").checked,
+    };
+    await api("/api/config", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    await loadConfig();
     els.settingsSaveMsg.textContent = "Saved!";
+  });
+
+  els.tabPanelPrompt.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const systemPrompt = document.getElementById("cfg-system-prompt").value;
+    await api("/api/config", {
+      method: "PUT",
+      body: JSON.stringify({ system_prompt: systemPrompt }),
+    });
+    await loadConfig();
+    els.promptSaveMsg.textContent = "System prompt saved!";
   });
 
   function escapeHtml(str) {
