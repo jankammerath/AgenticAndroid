@@ -282,10 +282,12 @@ pub async fn execute_device_tool(bridge: &DeviceBridge, name: &str, args: &Value
         return json!({ "ok": true, "waited_ms": ms }).to_string();
     }
 
-    let mut payload = args.as_object().cloned().unwrap_or_default();
-    payload.insert("action".to_string(), Value::String(name.to_string()));
+    let payload = json!({
+        "tool": name,
+        "params": args
+    });
 
-    match bridge.dispatch_async(Value::Object(payload)).await {
+    match bridge.dispatch_async(payload).await {
         Ok(val) => val.to_string(),
         Err(err) => json!({ "ok": false, "error": err }).to_string(),
     }

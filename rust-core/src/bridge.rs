@@ -69,19 +69,19 @@ impl DeviceBridge {
     }
 
     pub async fn get_status(&self) -> Value {
-        self.dispatch_async(json!({ "action": "status" }))
+        self.dispatch_async(json!({ "tool": "status" }))
             .await
             .unwrap_or_else(|e| json!({ "ok": false, "error": e }))
     }
 
     pub async fn get_ui_tree(&self) -> Value {
-        self.dispatch_async(json!({ "action": "get_ui_tree" }))
+        self.dispatch_async(json!({ "tool": "get_ui_tree" }))
             .await
             .unwrap_or_else(|e| json!({ "ok": false, "error": e }))
     }
 
     pub async fn request_screenshot(&self) -> Value {
-        self.dispatch_async(json!({ "action": "request_screenshot" }))
+        self.dispatch_async(json!({ "tool": "request_screenshot" }))
             .await
             .unwrap_or_else(|e| json!({ "ok": false, "error": e }))
     }
