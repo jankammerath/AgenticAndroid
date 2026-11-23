@@ -7,6 +7,8 @@
     <img src="https://img.shields.io/badge/All_Releases-GitHub-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" /></a>
 </p>
 
+[![GitHub Sponsor](https://img.shields.io/badge/sponsor-30363D?style=flat&logo=GitHub-Sponsors&logoColor=ea4aaa)](https://github.com/sponsors/jankammerath)
+
 Agentic Android is an app built in **Rust** with a minimal **Kotlin** app frontend, serving an embedded webserver with a modern web interface. It uses Android's Accessibility Services to observe and control the phone, exposing human-like interactions — tap, double tap, long press, swipe, text input, app launching, and system navigation — to your configured AI agent.
 
 ![Agentic Android](screenshots/agenticandroid-shopping.png)
