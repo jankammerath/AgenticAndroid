@@ -2,6 +2,8 @@
 
 Agentic Android is an app built in Rust with a minimal Kotlin app frontend, and serving a webserver with a web frontend. It uses Android's accessibility features to control the phone, and exposes the accessbility features to the configured agent to control the phone. This includes tap, swipe, key presses, and any other interaction a human can do on the phone.
 
+![Agentic Android doing price comparison](screenshots/agenticandroid-shopping.png)
+
 ## Core Component
 
 The core components of the app use NDK libraries written in Rust so ensure maximum performance. The Kotlin/JVM codebase is kept to the bare minimum and only used when absolutely necessary.
