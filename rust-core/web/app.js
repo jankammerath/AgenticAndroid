@@ -187,9 +187,163 @@
     }
   }
 
-  function formatContent(text) {
-    const escaped = escapeHtml(text || "");
-    return escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
+  function renderInlineMarkdown(text) {
+    const codeTokens = [];
+    let s = escapeHtml(text || "");
+
+    // Protect inline code spans first
+    s = s.replace(/`([^`\n]+)`/g, (_, code) => {
+      const idx = codeTokens.length;
+      codeTokens.push(`<code>${code}</code>`);
+      return `\u0000CODE${idx}\u0000`;
+    });
+
+    // Links [text](https://...)
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
+
+    // Bold + Italic, Bold, Italic, Strikethrough
+    s = s.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^\*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    s = s.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1<em>$2</em>");
+    s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+
+    // Restore inline code spans
+    s = s.replace(/\u0000CODE(\d+)\u0000/g, (_, idx) => codeTokens[Number(idx)] || "");
+    return s;
+  }
+
+  function renderMarkdown(md) {
+    const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+    const out = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Fenced code block
+      const fence = line.match(/^```(\w*)\s*$/);
+      if (fence) {
+        const lang = escapeHtml(fence[1] || "");
+        const codeLines = [];
+        i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+          codeLines.push(escapeHtml(lines[i]));
+          i++;
+        }
+        i++; // skip closing fence
+        const langAttr = lang ? ` data-lang="${lang}"` : "";
+        out.push(`<pre${langAttr}><code>${codeLines.join("\n")}</code></pre>`);
+        continue;
+      }
+
+      // Blank line
+      if (/^\s*$/.test(line)) {
+        i++;
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+        out.push("<hr />");
+        i++;
+        continue;
+      }
+
+      // Heading
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        const level = heading[1].length;
+        out.push(`<h${level}>${renderInlineMarkdown(heading[2].trim())}</h${level}>`);
+        i++;
+        continue;
+      }
+
+      // Blockquote
+      if (/^\s*>\s?/.test(line)) {
+        const qLines = [];
+        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+          qLines.push(lines[i].replace(/^\s*>\s?/, ""));
+          i++;
+        }
+        out.push(`<blockquote>${renderMarkdown(qLines.join("\n"))}</blockquote>`);
+        continue;
+      }
+
+      // GFM Table
+      if (
+        line.includes("|") &&
+        i + 1 < lines.length &&
+        /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/.test(lines[i + 1])
+      ) {
+        const parseRow = (r) =>
+          r
+            .trim()
+            .replace(/^\|/, "")
+            .replace(/\|$/, "")
+            .split("|")
+            .map((c) => c.trim());
+        const headers = parseRow(line);
+        i += 2; // skip header & separator
+        const rows = [];
+        while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) {
+          rows.push(parseRow(lines[i]));
+          i++;
+        }
+        const thead = `<thead><tr>${headers.map((h) => `<th>${renderInlineMarkdown(h)}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${rows
+          .map((r) => `<tr>${r.map((c) => `<td>${renderInlineMarkdown(c)}</td>`).join("")}</tr>`)
+          .join("")}</tbody>`;
+        out.push(`<div class="md-table-wrap"><table>${thead}${tbody}</table></div>`);
+        continue;
+      }
+
+      // Unordered list
+      if (/^\s*[-*+]\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+          items.push(`<li>${renderInlineMarkdown(lines[i].replace(/^\s*[-*+]\s+/, ""))}</li>`);
+          i++;
+        }
+        out.push(`<ul>${items.join("")}</ul>`);
+        continue;
+      }
+
+      // Ordered list
+      if (/^\s*\d+\.\s+/.test(line)) {
+        const items = [];
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          items.push(`<li>${renderInlineMarkdown(lines[i].replace(/^\s*\d+\.\s+/, ""))}</li>`);
+          i++;
+        }
+        out.push(`<ol>${items.join("")}</ol>`);
+        continue;
+      }
+
+      // Paragraph
+      const pLines = [];
+      while (
+        i < lines.length &&
+        !/^\s*$/.test(lines[i]) &&
+        !/^```/.test(lines[i]) &&
+        !/^#{1,6}\s+/.test(lines[i]) &&
+        !/^\s*[-*+]\s+/.test(lines[i]) &&
+        !/^\s*\d+\.\s+/.test(lines[i]) &&
+        !/^\s*>\s?/.test(lines[i]) &&
+        !/^\s*([-*_])\1{2,}\s*$/.test(lines[i])
+      ) {
+        pLines.push(renderInlineMarkdown(lines[i]));
+        i++;
+      }
+      if (pLines.length > 0) {
+        out.push(`<p>${pLines.join("<br />")}</p>`);
+      }
+    }
+
+    return out.join("");
   }
 
   function renderMessages() {
@@ -220,7 +374,11 @@
           .join("");
         tracesHtml = `<details class="traces"><summary>${m.tool_traces.length} device action${m.tool_traces.length === 1 ? "" : "s"}</summary><div class="trace-list">${items}</div></details>`;
       }
-      div.innerHTML = `<div class="msg-body">${formatContent(m.content)}</div>${tracesHtml}`;
+      const bodyHtml =
+        m.role === "assistant"
+          ? `<div class="msg-body md-content">${renderMarkdown(m.content)}</div>`
+          : `<div class="msg-body user-text">${escapeHtml(m.content)}</div>`;
+      div.innerHTML = `${bodyHtml}${tracesHtml}`;
       els.chatMessages.appendChild(div);
     }
     els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
