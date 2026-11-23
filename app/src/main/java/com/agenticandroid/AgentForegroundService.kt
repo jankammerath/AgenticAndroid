@@ -26,6 +26,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.util.DisplayMetrics
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
@@ -160,11 +162,19 @@ class AgentForegroundService : Service() {
         mediaProjection = projection
         isMediaCastActive = true
 
-        val metrics = resources.displayMetrics
-        val fullW = metrics.widthPixels
-        val fullH = metrics.heightPixels
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val (fullW, fullH) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = wm.maximumWindowMetrics.bounds
+            Pair(bounds.width(), bounds.height())
+        } else {
+            val dm = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(dm)
+            Pair(dm.widthPixels, dm.heightPixels)
+        }
+        val densityDpi = resources.displayMetrics.densityDpi
         val streamW = if (fullW > 720) 720 else fullW
-        val streamH = (fullH.toFloat() * streamW / fullW).toInt().coerceAtLeast(1)
+        val streamH = Math.round(fullH.toFloat() * streamW / fullW).coerceAtLeast(1)
 
         val ht = HandlerThread("ScreenCapture").apply { start() }
         captureThread = ht
@@ -217,7 +227,7 @@ class AgentForegroundService : Service() {
             "AgenticAndroidScreen",
             streamW,
             streamH,
-            metrics.densityDpi,
+            densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             reader.surface,
             null,
