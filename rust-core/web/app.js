@@ -354,7 +354,7 @@
     if (session.messages.length === 0) {
       const empty = document.createElement("div");
       empty.className = "msg welcome";
-      empty.innerHTML = `<h3>Agentic Android</h3><p>Describe what you want done on your device, or interact with the live screen on the right.</p>`;
+      empty.innerHTML = `<img src="/logo.png" alt="Agentic Android" class="welcome-logo" /><h3>Agentic Android</h3><p>Describe what you want done on your device, or interact with the live screen on the right.</p>`;
       els.chatMessages.appendChild(empty);
       return;
     }

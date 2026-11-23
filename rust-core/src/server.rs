@@ -18,6 +18,8 @@ use tower_http::cors::{Any, CorsLayer};
 const INDEX_HTML: &str = include_str!("../web/index.html");
 const STYLE_CSS: &str = include_str!("../web/style.css");
 const APP_JS: &str = include_str!("../web/app.js");
+const LOGO_PNG: &[u8] = include_bytes!("../web/logo.png");
+const FAVICON_PNG: &[u8] = include_bytes!("../web/favicon.png");
 
 #[derive(Clone)]
 pub struct ServerCtx {
@@ -42,6 +44,8 @@ pub async fn start_http_server(
         .route("/", get(serve_index))
         .route("/style.css", get(serve_css))
         .route("/app.js", get(serve_js))
+        .route("/logo.png", get(serve_logo))
+        .route("/favicon.png", get(serve_favicon))
         .route("/api/health", get(api_health))
         .route("/api/status", get(api_status))
         .route("/api/config", get(api_get_config).put(api_update_config))
@@ -99,6 +103,14 @@ async fn serve_js() -> Response {
         APP_JS,
     )
         .into_response()
+}
+
+async fn serve_logo() -> Response {
+    ([(header::CONTENT_TYPE, "image/png")], LOGO_PNG).into_response()
+}
+
+async fn serve_favicon() -> Response {
+    ([(header::CONTENT_TYPE, "image/png")], FAVICON_PNG).into_response()
 }
 
 async fn api_health() -> Json<Value> {
