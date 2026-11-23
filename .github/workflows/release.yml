@@ -32,11 +32,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
-        run: sdkmanager "ndk;${NDK_VERSION}"
+      - name: Install Android SDK components & NDK
+        run: |
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "${ANDROID_HOME}/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "ndk;${NDK_VERSION}" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Rust toolchain with Android targets
         uses: dtolnay/rust-toolchain@stable
