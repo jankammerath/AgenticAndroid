@@ -582,10 +582,16 @@ fn find_running_device(android_home: &Path) -> Option<String> {
 }
 
 fn select_or_create_avd(cfg: &EffectiveConfig) -> Result<String, String> {
-    if let Some(ref name) = cfg.avd {
-        return Ok(name.clone());
-    }
     let avds = list_avds(&cfg.android_home)?;
+
+    if let Some(ref requested) = cfg.avd {
+        if avds.iter().any(|a| a == requested) {
+            return Ok(requested.clone());
+        }
+        println!("    Configured AVD '{requested}' not found. Creating it...");
+        return create_avd(cfg, requested);
+    }
+
     if let Some(phone) = avds
         .iter()
         .find(|a| {
@@ -600,9 +606,11 @@ fn select_or_create_avd(cfg: &EffectiveConfig) -> Result<String, String> {
         return Ok(first);
     }
 
-    // Create an AVD from the first installed matching system image
-    let avd_name = "agentic_android_avd".to_string();
-    println!("    No AVD found. Creating '{avd_name}'...");
+    println!("    No AVD found. Creating 'agentic_android_avd'...");
+    create_avd(cfg, "agentic_android_avd")
+}
+
+fn create_avd(cfg: &EffectiveConfig, avd_name: &str) -> Result<String, String> {
     let sys_img_pkg = find_system_image_package(&cfg.android_home, &cfg.abi)?;
     println!("    Using system image: {sys_img_pkg}");
 
@@ -612,13 +620,14 @@ fn select_or_create_avd(cfg: &EffectiveConfig) -> Result<String, String> {
             "avd",
             "--force",
             "--name",
-            &avd_name,
+            avd_name,
             "--package",
             &sys_img_pkg,
             "--device",
             "pixel_6",
         ])
         .env("ANDROID_HOME", &cfg.android_home)
+        .env("ANDROID_SDK_ROOT", &cfg.android_home)
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to invoke avdmanager: {e}"))?;
@@ -630,9 +639,9 @@ fn select_or_create_avd(cfg: &EffectiveConfig) -> Result<String, String> {
         .wait()
         .map_err(|e| format!("avdmanager failed: {e}"))?;
     if !status.success() {
-        return Err("Failed to create AVD.".into());
+        return Err(format!("Failed to create AVD '{avd_name}'."));
     }
-    Ok(avd_name)
+    Ok(avd_name.to_string())
 }
 
 fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, String> {

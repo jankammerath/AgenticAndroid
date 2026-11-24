@@ -1,0 +1,20 @@
+# Agentic Android Headless Daemon Configuration
+# After editing, restart with: sudo systemctl restart agentic-android
+
+# Name of the AVD to run (leave commented to auto-select or create one)
+avd = "agentic_android_avd"
+
+# Bundled universal APK installed by the DEB/RPM package
+apk = "/usr/share/agentic-android/AgenticAndroid.apk"
+
+# Web UI & adb forward port
+port = 8080
+
+# Run the Android emulator without a display window
+headless = true
+
+# Android SDK root containing platform-tools, emulator, cmdline-tools, and system-images
+android_home = "/opt/android-sdk"
+
+# State directory for PID files and emulator/daemon logs
+state_dir = "/var/lib/agentic-android"

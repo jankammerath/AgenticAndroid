@@ -2,7 +2,11 @@
 
 <p align="left">
   <a href="https://github.com/jankammerath/AgenticAndroid/releases/latest/download/AgenticAndroid.apk">
-    <img src="https://img.shields.io/badge/Download_APK-Latest_Release-3b82f6?style=for-the-badge&logo=android&logoColor=white" alt="Download Agentic Android APK" /></a>
+    <img src="https://img.shields.io/badge/Download_APK-Android-3b82f6?style=for-the-badge&logo=android&logoColor=white" alt="Download Agentic Android APK" /></a>
+  <a href="https://github.com/jankammerath/AgenticAndroid/releases/latest/download/agentic-android.deb">
+    <img src="https://img.shields.io/badge/Download_DEB-Debian%2FUbuntu-d70a53?style=for-the-badge&logo=debian&logoColor=white" alt="Download DEB Package" /></a>
+  <a href="https://github.com/jankammerath/AgenticAndroid/releases/latest/download/agentic-android.rpm">
+    <img src="https://img.shields.io/badge/Download_RPM-Fedora%2FRHEL-ee0000?style=for-the-badge&logo=redhat&logoColor=white" alt="Download RPM Package" /></a>
   <a href="https://github.com/jankammerath/AgenticAndroid/releases">
     <img src="https://img.shields.io/badge/All_Releases-GitHub-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="All Releases" /></a>
 </p>
@@ -54,6 +58,91 @@ adb forward tcp:8080 tcp:8080
 ```
 
 Then open `http://localhost:8080` in your computer's browser.
+
+---
+
+## Linux Server Installation (DEB / RPM + systemd)
+
+The `.deb` and `.rpm` packages install the `agentic-android` Rust CLI (`/usr/bin/agentic-android`), the bundled universal APK (`/usr/share/agentic-android/AgenticAndroid.apk`), a default config (`/etc/agentic-android/config.toml`), and a `systemd` service (`agentic-android.service`) that runs a headless Android emulator in the background.
+
+### 1. Install KVM & System Dependencies
+
+The Android emulator requires hardware virtualization (**KVM**) on Linux (`x86_64`) plus a few runtime libraries and Java 17 (for `sdkmanager` / `avdmanager`):
+
+**Debian / Ubuntu:**
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  qemu-kvm libvirt-daemon-system bridge-utils cpu-checker \
+  openjdk-17-jre-headless unzip curl \
+  libpulse0 libgl1 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6
+
+# Verify KVM hardware virtualization is available
+kvm-ok
+```
+
+**Fedora / RHEL / Rocky Linux:**
+```bash
+sudo dnf install -y \
+  qemu-kvm libvirt java-17-openjdk-headless unzip curl \
+  pulseaudio-libs mesa-libGL nss libXcomposite libXcursor libXi libXtst
+
+# Verify /dev/kvm is present
+ls -l /dev/kvm
+```
+
+### 2. Install Android SDK, Emulator & System Image
+
+Install the Android command-line tools into `/opt/android-sdk` (the default `android_home` in `/etc/agentic-android/config.toml`):
+
+```bash
+sudo mkdir -p /opt/android-sdk/cmdline-tools
+cd /tmp
+curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline-tools.zip
+unzip -q cmdline-tools.zip -d cmdline-tools-tmp
+sudo mv cmdline-tools-tmp/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+rm -rf cmdline-tools.zip cmdline-tools-tmp
+
+export ANDROID_HOME=/opt/android-sdk
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+# Accept licenses and install platform-tools, emulator, and an x86_64 Google APIs system image
+yes | sudo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+sudo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+  "platform-tools" \
+  "emulator" \
+  "platforms;android-35" \
+  "system-images;android-35;google_apis;x86_64"
+```
+
+### 3. Install the Agentic Android Package
+
+**Debian / Ubuntu (`.deb`):**
+```bash
+curl -fsSL https://github.com/jankammerath/AgenticAndroid/releases/latest/download/agentic-android.deb -o agentic-android.deb
+sudo apt-get install -y ./agentic-android.deb
+```
+
+**Fedora / RHEL / Rocky Linux (`.rpm`):**
+```bash
+curl -fsSL https://github.com/jankammerath/AgenticAndroid/releases/latest/download/agentic-android.rpm -o agentic-android.rpm
+sudo dnf install -y ./agentic-android.rpm
+```
+
+### 4. Configure & Enable the systemd Service
+
+1. *(Optional)* Review `/etc/agentic-android/config.toml` to customize the AVD name, port (default `8080`), or `android_home`. If the configured AVD does not exist yet, `agentic-android` will automatically create `agentic_android_avd` from the installed `x86_64` system image on first boot.
+2. Enable and start the service:
+   ```bash
+   sudo systemctl enable --now agentic-android
+   ```
+3. Check service status and logs:
+   ```bash
+   sudo systemctl status agentic-android
+   sudo journalctl -u agentic-android -f
+   agentic-android daemon status
+   ```
+4. Open `http://<server-ip>:8080` (or `http://localhost:8080`), add your AI provider keys in **Settings**, and consider enabling **Settings → Security** (username/password + 2FA) if exposed on a network.
 
 ---
 

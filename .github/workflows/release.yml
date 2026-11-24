@@ -128,16 +128,37 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ github.event.inputs.tag }}"
           fi
+          CLEAN_VERSION="${TAG_NAME#v}"
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/AgenticAndroid.apk
           cp app/build/outputs/apk/release/app-release.apk "dist/AgenticAndroid-${TAG_NAME}.apk"
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK build artifact
+      - name: Build Linux CLI binary (x86_64)
+        run: cargo build --release --manifest-path cli/Cargo.toml
+
+      - name: Install nFPM and build DEB & RPM packages
+        env:
+          VERSION: ${{ steps.asset.outputs.version }}
+        run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt-get update
+          sudo apt-get install -y nfpm
+
+          nfpm package --config packaging/nfpm.yaml --packager deb --target "dist/agentic-android_${VERSION}_amd64.deb"
+          nfpm package --config packaging/nfpm.yaml --packager rpm --target "dist/agentic-android-${VERSION}-1.x86_64.rpm"
+          cp "dist/agentic-android_${VERSION}_amd64.deb" dist/agentic-android.deb
+          cp "dist/agentic-android-${VERSION}-1.x86_64.rpm" dist/agentic-android.rpm
+
+      - name: Upload release build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AgenticAndroid-${{ steps.asset.outputs.tag_name }}
-          path: dist/AgenticAndroid.apk
+          path: |
+            dist/AgenticAndroid.apk
+            dist/agentic-android.deb
+            dist/agentic-android.rpm
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -148,3 +169,7 @@ jobs:
           files: |
             dist/AgenticAndroid.apk
             dist/AgenticAndroid-${{ steps.asset.outputs.tag_name }}.apk
+            dist/agentic-android.deb
+            dist/agentic-android_${{ steps.asset.outputs.version }}_amd64.deb
+            dist/agentic-android.rpm
+            dist/agentic-android-${{ steps.asset.outputs.version }}-1.x86_64.rpm

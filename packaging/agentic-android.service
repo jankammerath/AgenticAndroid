@@ -1,0 +1,20 @@
+[Unit]
+Description=Agentic Android Headless Emulator & Supervisor
+Documentation=https://github.com/jankammerath/AgenticAndroid
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/agentic-android run --supervise --config /etc/agentic-android/config.toml
+ExecStop=/usr/bin/agentic-android stop --state-dir /var/lib/agentic-android
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+Environment=HOME=/var/lib/agentic-android
+Environment=ANDROID_SDK_ROOT=/opt/android-sdk
+Environment=ANDROID_HOME=/opt/android-sdk
+Environment=ANDROID_AVD_HOME=/var/lib/agentic-android/.android/avd
+
+[Install]
+WantedBy=multi-user.target
