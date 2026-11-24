@@ -280,6 +280,12 @@ impl AppState {
             .build()
             .expect("Failed to build reqwest client");
 
+        let mut auth_tokens =
+            load_json::<HashMap<String, u64>>(&config_dir.join("auth_tokens.json"))
+                .unwrap_or_default();
+        let now = now_ms();
+        auth_tokens.retain(|_, &mut exp| exp > now);
+
         Arc::new(Self {
             config_dir,
             port,
@@ -290,7 +296,7 @@ impl AppState {
             audio_tx,
             event_tx,
             active_runs: Mutex::new(HashMap::new()),
-            auth_tokens: RwLock::new(HashMap::new()),
+            auth_tokens: RwLock::new(auth_tokens),
             pending_totp_secret: RwLock::new(None),
             http_client,
         })
@@ -306,6 +312,17 @@ impl AppState {
         let sessions = self.sessions.read().await.clone();
         let path = self.config_dir.join("sessions.json");
         let _ = save_json(&path, &sessions);
+    }
+
+    pub async fn save_auth_tokens(&self) {
+        let now = now_ms();
+        let tokens = {
+            let mut map = self.auth_tokens.write().await;
+            map.retain(|_, &mut exp| exp > now);
+            map.clone()
+        };
+        let path = self.config_dir.join("auth_tokens.json");
+        let _ = save_json(&path, &tokens);
     }
 
     pub async fn push_video_frame(&self, jpeg: Vec<u8>, width: u32, height: u32) {

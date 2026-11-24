@@ -276,6 +276,7 @@ async fn api_auth_login(
         tokens.retain(|_, &mut exp| exp > now_ms());
         tokens.insert(token.clone(), expires_at);
     }
+    ctx.state.save_auth_tokens().await;
 
     let mut resp = Json(json!({ "ok": true, "authenticated": true })).into_response();
     resp.headers_mut()
@@ -289,6 +290,7 @@ async fn api_auth_logout(
 ) -> Response {
     if let Some(token) = extract_session_cookie(&headers) {
         ctx.state.auth_tokens.write().await.remove(&token);
+        ctx.state.save_auth_tokens().await;
     }
     let mut resp = Json(json!({ "ok": true })).into_response();
     resp.headers_mut()
@@ -332,6 +334,7 @@ async fn api_auth_set_credentials(
         tokens.clear();
         tokens.insert(token.clone(), expires_at);
     }
+    ctx.state.save_auth_tokens().await;
 
     let mut resp = Json(json!({ "ok": true, "auth_enabled": true })).into_response();
     resp.headers_mut()
@@ -349,6 +352,7 @@ async fn api_auth_disable(State(ctx): State<ServerCtx>) -> Response {
         cfg.auth.password_hash.clear();
     }
     ctx.state.auth_tokens.write().await.clear();
+    ctx.state.save_auth_tokens().await;
     *ctx.state.pending_totp_secret.write().await = None;
     ctx.state.save_config().await;
 
