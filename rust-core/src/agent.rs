@@ -1,6 +1,6 @@
 use crate::bridge::DeviceBridge;
 use crate::llm::{call_llm, GeminiGroundingOptions, TurnMessage};
-use crate::state::{now_ms, AgentEvent, AppState, ChatMessage, ToolTrace};
+use crate::state::{now_ms, AgentEvent, AppPlaybook, AppState, ChatMessage, ToolTrace};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -252,10 +252,43 @@ async fn build_device_context(
     include_screenshot: bool,
 ) -> (String, Option<Vec<u8>>) {
     let ui_tree = bridge.get_ui_tree().await;
+    let pkg = ui_tree["package"].as_str().unwrap_or("").trim().to_string();
+    let current_ver = ui_tree["app_version"].as_str().unwrap_or("").trim().to_string();
+
     let mut ui_str = serde_json::to_string(&ui_tree).unwrap_or_else(|_| "{}".to_string());
     if ui_str.len() > 14000 {
         ui_str.truncate(14000);
         ui_str.push_str("...(truncated)");
+    }
+
+    // Just-in-time injection of saved playbook for the active foreground app
+    if !pkg.is_empty() {
+        let playbook_opt = state.app_playbooks.read().await.get(&pkg).cloned();
+        if let Some(pb) = playbook_opt {
+            if !pb.notes.is_empty() {
+                let mut block = String::from("\n\n[Saved App Playbook for ");
+                block.push_str(&pb.package_name);
+                if !pb.app_label.is_empty() {
+                    block.push_str(&format!(" ({})", pb.app_label));
+                }
+                block.push_str("]\n");
+                if !pb.app_version.is_empty()
+                    && !current_ver.is_empty()
+                    && pb.app_version != current_ver
+                {
+                    block.push_str(&format!(
+                        "(Note: recorded on v{}, current app is v{} — verify before assuming exact selectors)\n",
+                        pb.app_version, current_ver
+                    ));
+                }
+                for n in pb.notes.iter().take(20) {
+                    block.push_str("- ");
+                    block.push_str(n);
+                    block.push('\n');
+                }
+                ui_str.push_str(&block);
+            }
+        }
     }
 
     let screenshot = if include_screenshot {
@@ -288,7 +321,87 @@ pub async fn execute_agent_tool(
     match name {
         "capture_screenshot" => handle_capture_screenshot(state, bridge, args).await,
         "crop_image" => handle_crop_image(state, args).await,
+        "save_app_note" => handle_save_app_note(state, args).await,
+        "delete_app_note" => handle_delete_app_note(state, args).await,
+        "get_app_notes" => handle_get_app_notes(state, args).await,
         _ => execute_device_tool(bridge, name, args).await,
+    }
+}
+
+async fn handle_save_app_note(state: &Arc<AppState>, args: &Value) -> String {
+    let pkg = args["package_name"].as_str().unwrap_or("").trim().to_string();
+    let note = args["note"].as_str().unwrap_or("").trim().to_string();
+    if pkg.is_empty() || note.is_empty() {
+        return json!({ "ok": false, "error": "package_name and note are required" }).to_string();
+    }
+    let label = args["app_label"].as_str().unwrap_or("").trim().to_string();
+    let version = args["app_version"].as_str().unwrap_or("").trim().to_string();
+
+    let count = {
+        let mut map = state.app_playbooks.write().await;
+        let entry = map.entry(pkg.clone()).or_insert_with(|| AppPlaybook {
+            package_name: pkg.clone(),
+            app_label: label.clone(),
+            app_version: version.clone(),
+            notes: Vec::new(),
+            updated_at_ms: now_ms(),
+        });
+        if !label.is_empty() {
+            entry.app_label = label;
+        }
+        if !version.is_empty() {
+            entry.app_version = version;
+        }
+        let lower = note.to_lowercase();
+        if !entry.notes.iter().any(|existing| existing.to_lowercase() == lower) {
+            if entry.notes.len() >= 25 {
+                entry.notes.remove(0);
+            }
+            entry.notes.push(note.clone());
+        }
+        entry.updated_at_ms = now_ms();
+        entry.notes.len()
+    };
+    state.save_app_playbooks().await;
+    json!({ "ok": true, "package_name": pkg, "total_notes": count }).to_string()
+}
+
+async fn handle_delete_app_note(state: &Arc<AppState>, args: &Value) -> String {
+    let pkg = args["package_name"].as_str().unwrap_or("").trim().to_string();
+    let needle = args["match_text"].as_str().unwrap_or("").trim().to_lowercase();
+    if pkg.is_empty() || needle.is_empty() {
+        return json!({ "ok": false, "error": "package_name and match_text are required" })
+            .to_string();
+    }
+
+    let removed = {
+        let mut map = state.app_playbooks.write().await;
+        if let Some(entry) = map.get_mut(&pkg) {
+            let before = entry.notes.len();
+            entry.notes.retain(|n| !n.to_lowercase().contains(&needle));
+            entry.updated_at_ms = now_ms();
+            let diff = before - entry.notes.len();
+            if entry.notes.is_empty() {
+                map.remove(&pkg);
+            }
+            diff
+        } else {
+            0
+        }
+    };
+    state.save_app_playbooks().await;
+    json!({ "ok": true, "package_name": pkg, "removed": removed }).to_string()
+}
+
+async fn handle_get_app_notes(state: &Arc<AppState>, args: &Value) -> String {
+    let pkg = args["package_name"].as_str().unwrap_or("").trim();
+    if pkg.is_empty() {
+        return json!({ "ok": false, "error": "package_name is required" }).to_string();
+    }
+    let map = state.app_playbooks.read().await;
+    match map.get(pkg) {
+        Some(pb) => serde_json::to_string(pb).unwrap_or_else(|_| "{}".to_string()),
+        None => json!({ "ok": true, "package_name": pkg, "notes": [] }).to_string(),
     }
 }
 

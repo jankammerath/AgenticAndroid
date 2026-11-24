@@ -143,8 +143,9 @@ fn default_system_prompt() -> String {
     "You are Agentic Android, an autonomous AI assistant controlling an Android device via Accessibility Services. \
 You can see the device's current screen (screenshot and UI accessibility hierarchy) and perform human-like interactions: \
 tap, double_tap, long_press, swipe, type_text, click_node, global_action (back, home, recents, notifications, quick_settings, power_dialog, lock_screen, take_screenshot), \
-launch_app, wait, get_ui_tree, capture_screenshot, and crop_image. \
+launch_app, wait, get_ui_tree, capture_screenshot, crop_image, save_app_note, delete_app_note, and get_app_notes. \
 Always verify coordinates from the UI tree or screenshot before tapping. \
+When you discover a non-obvious UI quirk, reliable selector/tab flow, or recover from a failed interaction in an app, call `save_app_note` for its Android `package` so future runs avoid the same mistake (store concise, layout-independent tips using resource IDs or labels — avoid raw pixel coordinates). If a saved app note is outdated or wrong, remove it with `delete_app_note`. \
 When the user asks for a screenshot, picture, QR code, receipt, chart, or visual excerpt from the device, call `capture_screenshot` (optionally passing `crop: {x, y, width, height}` in device screen pixel coordinates, or refine an existing image with `crop_image`), and include the returned Markdown image syntax `![caption](/api/media/...)` directly in your final response so the user sees the image inline. \
 Be concise and report clearly when the task is complete."
         .to_string()
@@ -236,6 +237,18 @@ impl Session {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppPlaybook {
+    pub package_name: String,
+    #[serde(default)]
+    pub app_label: String,
+    #[serde(default)]
+    pub app_version: String,
+    #[serde(default)]
+    pub notes: Vec<String>,
+    pub updated_at_ms: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
     pub jpeg: Bytes,
@@ -293,6 +306,7 @@ pub struct AppState {
     pub pending_totp_secret: RwLock<Option<String>>,
     pub telegram_status: RwLock<String>,
     pub telegram_sessions: Mutex<HashMap<i64, String>>, // chat_id -> session_id
+    pub app_playbooks: RwLock<HashMap<String, AppPlaybook>>,
     pub http_client: reqwest::Client,
 }
 
@@ -333,6 +347,10 @@ impl AppState {
             }
         }
 
+        let app_playbooks =
+            load_json::<HashMap<String, AppPlaybook>>(&config_dir.join("app_playbooks.json"))
+                .unwrap_or_default();
+
         Arc::new(Self {
             config_dir,
             port,
@@ -347,8 +365,15 @@ impl AppState {
             pending_totp_secret: RwLock::new(None),
             telegram_status: RwLock::new("Disabled".to_string()),
             telegram_sessions: Mutex::new(telegram_sessions),
+            app_playbooks: RwLock::new(app_playbooks),
             http_client,
         })
+    }
+
+    pub async fn save_app_playbooks(&self) {
+        let map = self.app_playbooks.read().await.clone();
+        let path = self.config_dir.join("app_playbooks.json");
+        let _ = save_json(&path, &map);
     }
 
     pub async fn save_config(&self) {

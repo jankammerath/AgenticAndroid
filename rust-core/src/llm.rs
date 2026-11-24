@@ -192,6 +192,43 @@ pub fn device_tool_definitions() -> Vec<Value> {
                 "required": ["source_url", "x", "y", "width", "height"]
             }
         }),
+        json!({
+            "name": "save_app_note",
+            "description": "Save a durable UI quirk, navigation tip, or workaround for a specific Android app package so future sessions avoid repeating mistakes. Prefer resource IDs and labels over raw pixel coordinates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package_name": { "type": "string", "description": "Android package name (e.g. 'de.hafas.android.db')" },
+                    "note": { "type": "string", "description": "Concise, reusable tip or UI quirk to remember" },
+                    "app_label": { "type": "string", "description": "Optional human-readable app name" },
+                    "app_version": { "type": "string", "description": "Optional app version string from the UI tree" }
+                },
+                "required": ["package_name", "note"]
+            }
+        }),
+        json!({
+            "name": "delete_app_note",
+            "description": "Remove an outdated or incorrect note from an app's saved playbook by matching a substring.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package_name": { "type": "string", "description": "Android package name" },
+                    "match_text": { "type": "string", "description": "Substring of the note to remove" }
+                },
+                "required": ["package_name", "match_text"]
+            }
+        }),
+        json!({
+            "name": "get_app_notes",
+            "description": "Read the saved UI playbook notes for a specific Android app package.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package_name": { "type": "string", "description": "Android package name" }
+                },
+                "required": ["package_name"]
+            }
+        }),
     ]
 }
 

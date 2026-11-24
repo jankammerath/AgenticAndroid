@@ -57,6 +57,13 @@
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
+    tabPanelMemory: document.getElementById("tab-panel-memory"),
+    appMemoryList: document.getElementById("app-memory-list"),
+    appMemoryForm: document.getElementById("app-memory-form"),
+    memPackage: document.getElementById("mem-package"),
+    memLabel: document.getElementById("mem-label"),
+    memNotes: document.getElementById("mem-notes"),
+    memSaveMsg: document.getElementById("mem-save-msg"),
     tabPanelTelegram: document.getElementById("tab-panel-telegram"),
     tabPanelSecurity: document.getElementById("tab-panel-security"),
     tgStatusBadge: document.getElementById("tg-status-badge"),
@@ -1006,10 +1013,13 @@
     els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
     els.tabPanelModels.classList.toggle("hidden", tabName !== "models");
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
+    els.tabPanelMemory.classList.toggle("hidden", tabName !== "memory");
     els.tabPanelTelegram.classList.toggle("hidden", tabName !== "telegram");
     els.tabPanelSecurity.classList.toggle("hidden", tabName !== "security");
     if (tabName === "models") {
       fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
+    } else if (tabName === "memory") {
+      loadAppMemory();
     } else if (tabName === "telegram") {
       loadConfig();
     } else if (tabName === "security") {
@@ -1025,6 +1035,7 @@
     els.keysSaveMsg.textContent = "";
     els.settingsSaveMsg.textContent = "";
     els.promptSaveMsg.textContent = "";
+    els.memSaveMsg.textContent = "";
     els.tgSaveMsg.textContent = "";
     els.secMsg.textContent = "";
     els.secMfaSetupBox.classList.add("hidden");
@@ -1094,6 +1105,77 @@
     });
     await loadConfig();
     els.promptSaveMsg.textContent = "System prompt saved!";
+  });
+
+  async function loadAppMemory() {
+    const list = await api("/api/app-memory");
+    els.appMemoryList.innerHTML = "";
+    if (!list || list.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "keys-empty";
+      empty.textContent = "No app playbooks saved yet. The agent will record UI quirks automatically, or you can add one below.";
+      els.appMemoryList.appendChild(empty);
+      return;
+    }
+
+    for (const pb of list) {
+      const card = document.createElement("div");
+      card.className = "memory-card";
+      const title = pb.app_label ? `${pb.app_label}` : pb.package_name;
+      const ver = pb.app_version ? ` · v${pb.app_version}` : "";
+      const notesHtml = (pb.notes || [])
+        .map((n) => `<li>${escapeHtml(n)}</li>`)
+        .join("");
+      card.innerHTML = `
+        <div class="memory-card-head">
+          <div>
+            <div class="key-row-name">${escapeHtml(title)}</div>
+            <div class="memory-pkg">${escapeHtml(pb.package_name)}${escapeHtml(ver)}</div>
+          </div>
+          <div class="security-actions">
+            <button type="button" class="pill-btn btn-edit-mem">Edit</button>
+            <button type="button" class="pill-btn pill-btn-danger btn-del-mem">Delete</button>
+          </div>
+        </div>
+        <ul class="memory-notes">${notesHtml}</ul>
+      `;
+      card.querySelector(".btn-edit-mem").addEventListener("click", () => {
+        els.memPackage.value = pb.package_name;
+        els.memLabel.value = pb.app_label || "";
+        els.memNotes.value = (pb.notes || []).join("\n");
+        els.memNotes.focus();
+      });
+      card.querySelector(".btn-del-mem").addEventListener("click", async () => {
+        await api(`/api/app-memory/${encodeURIComponent(pb.package_name)}`, {
+          method: "DELETE",
+        });
+        await loadAppMemory();
+      });
+      els.appMemoryList.appendChild(card);
+    }
+  }
+
+  els.appMemoryForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.memSaveMsg.textContent = "";
+    const pkg = els.memPackage.value.trim();
+    if (!pkg) return;
+    const notes = els.memNotes.value
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    await api(`/api/app-memory/${encodeURIComponent(pkg)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        app_label: els.memLabel.value.trim(),
+        notes,
+      }),
+    });
+    els.memPackage.value = "";
+    els.memLabel.value = "";
+    els.memNotes.value = "";
+    els.memSaveMsg.textContent = "Playbook saved!";
+    await loadAppMemory();
   });
 
   els.tabPanelTelegram.addEventListener("submit", async (e) => {

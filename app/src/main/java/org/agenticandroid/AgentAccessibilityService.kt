@@ -217,11 +217,27 @@ class AgentAccessibilityService : AccessibilityService() {
     fun dumpUiTree(): JSONObject {
         val root = rootInActiveWindow ?: return JSONObject().put("ok", false).put("error", "No active window")
         val (w, h) = getScreenSize()
+        val pkg = root.packageName?.toString() ?: ""
+        var appVersion = ""
+        var appLabel = ""
+        if (pkg.isNotEmpty()) {
+            try {
+                val pInfo = packageManager.getPackageInfo(pkg, 0)
+                appVersion = pInfo.versionName ?: ""
+                val appInfo = pInfo.applicationInfo
+                if (appInfo != null) {
+                    appLabel = packageManager.getApplicationLabel(appInfo).toString()
+                }
+            } catch (_: Throwable) {
+            }
+        }
         val nodes = JSONArray()
         collectInteractiveNodes(root, nodes, 0)
         return JSONObject().apply {
             put("ok", true)
-            put("package", root.packageName?.toString() ?: "")
+            put("package", pkg)
+            if (appLabel.isNotEmpty()) put("app_label", appLabel)
+            if (appVersion.isNotEmpty()) put("app_version", appVersion)
             put("screen_width", w)
             put("screen_height", h)
             put("elements", nodes)

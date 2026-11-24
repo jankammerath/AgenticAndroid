@@ -2,7 +2,7 @@ use crate::agent::{execute_device_tool, run_agent_turn};
 use crate::auth;
 use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
-use crate::state::{now_ms, AppState, Provider, Session};
+use crate::state::{now_ms, AppPlaybook, AppState, Provider, Session};
 use crate::telegram::spawn_telegram_worker;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Request, State};
@@ -62,6 +62,11 @@ pub async fn start_http_server(
         .route("/api/device/ui-tree", get(api_ui_tree))
         .route("/api/device/screenshot", get(api_screenshot))
         .route("/api/media/:filename", get(api_get_media))
+        .route("/api/app-memory", get(api_list_app_memory))
+        .route(
+            "/api/app-memory/:package",
+            axum::routing::put(api_upsert_app_memory).delete(api_delete_app_memory),
+        )
         .route("/api/auth/credentials", post(api_auth_set_credentials))
         .route("/api/auth/disable", post(api_auth_disable))
         .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
@@ -874,6 +879,81 @@ async fn api_device_action(
 
 async fn api_ui_tree(State(ctx): State<ServerCtx>) -> Json<Value> {
     Json(ctx.bridge.get_ui_tree().await)
+}
+
+async fn api_list_app_memory(State(ctx): State<ServerCtx>) -> Json<Vec<AppPlaybook>> {
+    let mut items: Vec<AppPlaybook> = ctx
+        .state
+        .app_playbooks
+        .read()
+        .await
+        .values()
+        .cloned()
+        .collect();
+    items.sort_by(|a, b| b.updated_at_ms.cmp(&a.updated_at_ms));
+    Json(items)
+}
+
+#[derive(Deserialize)]
+struct UpsertAppMemoryRequest {
+    #[serde(default)]
+    app_label: String,
+    #[serde(default)]
+    app_version: String,
+    notes: Vec<String>,
+}
+
+async fn api_upsert_app_memory(
+    State(ctx): State<ServerCtx>,
+    Path(package): Path<String>,
+    Json(req): Json<UpsertAppMemoryRequest>,
+) -> Result<Json<AppPlaybook>, StatusCode> {
+    let pkg = package.trim().to_string();
+    if pkg.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let clean_notes: Vec<String> = req
+        .notes
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .take(25)
+        .collect();
+
+    let saved = {
+        let mut map = ctx.state.app_playbooks.write().await;
+        if clean_notes.is_empty() {
+            map.remove(&pkg);
+            AppPlaybook {
+                package_name: pkg.clone(),
+                app_label: req.app_label.trim().to_string(),
+                app_version: req.app_version.trim().to_string(),
+                notes: Vec::new(),
+                updated_at_ms: now_ms(),
+            }
+        } else {
+            let entry = AppPlaybook {
+                package_name: pkg.clone(),
+                app_label: req.app_label.trim().to_string(),
+                app_version: req.app_version.trim().to_string(),
+                notes: clean_notes,
+                updated_at_ms: now_ms(),
+            };
+            map.insert(pkg, entry.clone());
+            entry
+        }
+    };
+    ctx.state.save_app_playbooks().await;
+    Ok(Json(saved))
+}
+
+async fn api_delete_app_memory(
+    State(ctx): State<ServerCtx>,
+    Path(package): Path<String>,
+) -> Json<Value> {
+    ctx.state.app_playbooks.write().await.remove(package.trim());
+    ctx.state.save_app_playbooks().await;
+    Json(json!({ "ok": true }))
 }
 
 async fn api_get_media(

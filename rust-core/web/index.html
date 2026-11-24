@@ -139,6 +139,7 @@
         <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">Agent Keys</button>
         <button type="button" class="tab-btn" data-tab="models" role="tab" aria-selected="false">Models</button>
         <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">System Prompt</button>
+        <button type="button" class="tab-btn" data-tab="memory" role="tab" aria-selected="false">App Memory</button>
         <button type="button" class="tab-btn" data-tab="telegram" role="tab" aria-selected="false">Telegram</button>
         <button type="button" class="tab-btn" data-tab="security" role="tab" aria-selected="false">Security</button>
       </div>
@@ -247,7 +248,38 @@
         </div>
       </form>
 
-      <!-- Tab 4: Telegram Bot -->
+      <!-- Tab 4: App Memory (Per-App Playbooks) -->
+      <div class="modal-body tab-panel hidden" id="tab-panel-memory">
+        <p class="modal-desc">
+          Per-app UI notes learned by the agent (or added by you). Automatically injected whenever the agent uses that app.
+        </p>
+
+        <div class="memory-list" id="app-memory-list"></div>
+
+        <form class="security-card" id="app-memory-form">
+          <h3>Add / Edit App Playbook</h3>
+          <div class="settings-row settings-row-2">
+            <div class="field">
+              <label for="mem-package">Package Name</label>
+              <input type="text" id="mem-package" placeholder="e.g. de.hafas.android.db" required />
+            </div>
+            <div class="field">
+              <label for="mem-label">App Label (optional)</label>
+              <input type="text" id="mem-label" placeholder="e.g. DB Navigator" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="mem-notes">Notes (one tip or UI quirk per line)</label>
+            <textarea id="mem-notes" rows="4" placeholder="Tap 'Suche' button before typing destination&#10;Dismiss cookie banner via 'Alle akzeptieren'"></textarea>
+          </div>
+          <div class="modal-footer">
+            <span class="save-msg" id="mem-save-msg"></span>
+            <button type="submit" class="send-btn">Save Playbook</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 5: Telegram Bot -->
       <form class="modal-body tab-panel hidden" id="tab-panel-telegram">
         <div class="security-card">
           <div class="security-card-head">
