@@ -190,11 +190,11 @@ echo "==> [4/5] Installing APK & configuring Accessibility Service..."
 "$ADB" install -r "$APK_PATH"
 
 # Grant runtime permissions cleanly
-"$ADB" shell pm grant com.agenticandroid android.permission.RECORD_AUDIO 2>/dev/null || true
-"$ADB" shell pm grant com.agenticandroid android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+"$ADB" shell pm grant org.agenticandroid android.permission.RECORD_AUDIO 2>/dev/null || true
+"$ADB" shell pm grant org.agenticandroid android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 
 # Enable Accessibility Service automatically for simulator convenience
-SERVICE_ID="com.agenticandroid/com.agenticandroid.AgentAccessibilityService"
+SERVICE_ID="org.agenticandroid/org.agenticandroid.AgentAccessibilityService"
 EXISTING_SERVICES="$("$ADB" shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r' || true)"
 if [ -z "$EXISTING_SERVICES" ] || [ "$EXISTING_SERVICES" = "null" ]; then
   NEW_SERVICES="$SERVICE_ID"
@@ -208,7 +208,7 @@ fi
 
 echo "==> [5/5] Forwarding port $PORT and launching Agentic Android..."
 "$ADB" forward "tcp:$PORT" "tcp:$PORT"
-"$ADB" shell am start -S -n com.agenticandroid/.MainActivity --ez auto_start true --ei port "$PORT"
+"$ADB" shell am start -S -n org.agenticandroid/.MainActivity --ez auto_start true --ei port "$PORT"
 
 echo "    Waiting for Rust webserver on http://localhost:$PORT ..."
 for _ in $(seq 1 20); do

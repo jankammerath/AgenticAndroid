@@ -1,4 +1,4 @@
-package com.agenticandroid
+package org.agenticandroid
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription

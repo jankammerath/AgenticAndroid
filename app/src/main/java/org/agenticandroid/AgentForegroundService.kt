@@ -1,4 +1,4 @@
-package com.agenticandroid
+package org.agenticandroid
 
 import android.Manifest
 import android.app.Activity
@@ -39,9 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AgentForegroundService : Service() {
 
     companion object {
-        const val ACTION_START_SERVER = "com.agenticandroid.START_SERVER"
-        const val ACTION_STOP_SERVER = "com.agenticandroid.STOP_SERVER"
-        const val ACTION_START_MEDIA = "com.agenticandroid.START_MEDIA"
+        const val ACTION_START_SERVER = "org.agenticandroid.START_SERVER"
+        const val ACTION_STOP_SERVER = "org.agenticandroid.STOP_SERVER"
+        const val ACTION_START_MEDIA = "org.agenticandroid.START_MEDIA"
         const val EXTRA_PORT = "port"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"

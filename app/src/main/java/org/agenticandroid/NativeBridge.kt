@@ -1,4 +1,4 @@
-package com.agenticandroid
+package org.agenticandroid
 
 import android.os.Build
 import android.provider.Settings

@@ -46,7 +46,7 @@ fn server_slot() -> &'static Mutex<Option<RunningServer>> {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeStartServer(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeStartServer(
     mut env: JNIEnv,
     _class: JClass,
     port: jint,
@@ -108,7 +108,7 @@ pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeStartServer(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeStopServer(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeStopServer(
     _env: JNIEnv,
     _class: JClass,
 ) {
@@ -121,7 +121,7 @@ pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeStopServer(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeIsServerRunning(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeIsServerRunning(
     _env: JNIEnv,
     _class: JClass,
 ) -> jboolean {
@@ -134,7 +134,7 @@ pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeIsServerRunnin
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeGetServerPort(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeGetServerPort(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {
@@ -143,7 +143,7 @@ pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativeGetServerPort(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativePushVideoFrame(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativePushVideoFrame(
     env: JNIEnv,
     _class: JClass,
     jpeg_bytes: JByteArray,
@@ -169,7 +169,7 @@ pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativePushVideoFrame
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_agenticandroid_NativeBridge_nativePushAudioPcm(
+pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativePushAudioPcm(
     env: JNIEnv,
     _class: JClass,
     pcm_bytes: JByteArray,

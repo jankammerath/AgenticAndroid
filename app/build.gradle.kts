@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.agenticandroid"
+    namespace = "org.agenticandroid"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.agenticandroid"
+        applicationId = "org.agenticandroid"
         minSdk = 29
         targetSdk = 34
         versionCode = 1

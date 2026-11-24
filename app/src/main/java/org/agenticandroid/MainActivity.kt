@@ -1,4 +1,4 @@
-package com.agenticandroid
+package org.agenticandroid
 
 import android.Manifest
 import android.app.Activity
