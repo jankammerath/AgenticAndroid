@@ -57,7 +57,14 @@
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
+    tabPanelTelegram: document.getElementById("tab-panel-telegram"),
     tabPanelSecurity: document.getElementById("tab-panel-security"),
+    tgStatusBadge: document.getElementById("tg-status-badge"),
+    tgEnabled: document.getElementById("tg-enabled"),
+    tgBotToken: document.getElementById("tg-bot-token"),
+    tgTokenStatus: document.getElementById("tg-token-status"),
+    tgAllowedIds: document.getElementById("tg-allowed-ids"),
+    tgSaveMsg: document.getElementById("tg-save-msg"),
     secAuthBadge: document.getElementById("sec-auth-badge"),
     secMfaBadge: document.getElementById("sec-mfa-badge"),
     secCredentialsForm: document.getElementById("sec-credentials-form"),
@@ -635,6 +642,15 @@
     document.getElementById("cfg-gemini-search").checked = state.config.gemini_google_search !== false;
     document.getElementById("cfg-gemini-maps").checked = state.config.gemini_google_maps !== false;
     document.getElementById("cfg-system-prompt").value = state.config.system_prompt || "";
+    const tg = state.config.telegram || {};
+    els.tgEnabled.checked = !!tg.enabled;
+    els.tgTokenStatus.textContent = tg.token_masked ? `Saved (${tg.token_masked})` : "Not set";
+    els.tgAllowedIds.value = (tg.allowed_chat_ids || []).join(", ");
+    const tgStatus = tg.status || "Disabled";
+    const tgOk = tgStatus.startsWith("Connected");
+    const tgWarn = tg.enabled && !tgOk;
+    els.tgStatusBadge.className = `status-pill ${tgOk ? "ok" : tgWarn ? "warn" : ""}`;
+    els.tgStatusBadge.querySelector(".label").textContent = tgStatus;
     updateKeyWarning();
   }
 
@@ -986,9 +1002,12 @@
     els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
     els.tabPanelModels.classList.toggle("hidden", tabName !== "models");
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
+    els.tabPanelTelegram.classList.toggle("hidden", tabName !== "telegram");
     els.tabPanelSecurity.classList.toggle("hidden", tabName !== "security");
     if (tabName === "models") {
       fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
+    } else if (tabName === "telegram") {
+      loadConfig();
     } else if (tabName === "security") {
       refreshAuthStatus();
     }
@@ -1002,6 +1021,7 @@
     els.keysSaveMsg.textContent = "";
     els.settingsSaveMsg.textContent = "";
     els.promptSaveMsg.textContent = "";
+    els.tgSaveMsg.textContent = "";
     els.secMsg.textContent = "";
     els.secMfaSetupBox.classList.add("hidden");
     setSettingsTab("keys");
@@ -1070,6 +1090,34 @@
     });
     await loadConfig();
     els.promptSaveMsg.textContent = "System prompt saved!";
+  });
+
+  els.tabPanelTelegram.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.tgSaveMsg.textContent = "";
+    const ids = els.tgAllowedIds.value
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter((s) => /^-?\d+$/.test(s))
+      .map((s) => Number(s));
+
+    const tgPatch = {
+      enabled: els.tgEnabled.checked,
+      allowed_chat_ids: ids,
+    };
+    const tok = els.tgBotToken.value.trim();
+    if (tok !== "") {
+      tgPatch.bot_token = tok;
+      els.tgBotToken.value = "";
+    }
+
+    await api("/api/config", {
+      method: "PUT",
+      body: JSON.stringify({ telegram: tgPatch }),
+    });
+    els.tgSaveMsg.textContent = "Telegram settings saved!";
+    await loadConfig();
+    setTimeout(() => loadConfig(), 2500);
   });
 
   // Security & Auth flows

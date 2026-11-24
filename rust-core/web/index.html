@@ -139,6 +139,7 @@
         <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">Agent Keys</button>
         <button type="button" class="tab-btn" data-tab="models" role="tab" aria-selected="false">Models</button>
         <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">System Prompt</button>
+        <button type="button" class="tab-btn" data-tab="telegram" role="tab" aria-selected="false">Telegram</button>
         <button type="button" class="tab-btn" data-tab="security" role="tab" aria-selected="false">Security</button>
       </div>
 
@@ -246,7 +247,43 @@
         </div>
       </form>
 
-      <!-- Tab 4: Security (Login & 2FA) -->
+      <!-- Tab 4: Telegram Bot -->
+      <form class="modal-body tab-panel hidden" id="tab-panel-telegram">
+        <div class="security-card">
+          <div class="security-card-head">
+            <div>
+              <h3>Telegram Remote Control</h3>
+              <p class="modal-desc">Control this Android device from anywhere using a Telegram bot (create one with @BotFather).</p>
+            </div>
+            <span class="status-pill" id="tg-status-badge"><span class="dot"></span><span class="label">Disabled</span></span>
+          </div>
+
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" id="tg-enabled" />
+              Enable Telegram Bot (long-polling, no port forwarding needed)
+            </label>
+          </div>
+
+          <div class="field">
+            <label for="tg-bot-token">Bot Token <span class="key-status" id="tg-token-status"></span></label>
+            <input type="password" id="tg-bot-token" placeholder="123456789:AAH..." autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="tg-allowed-ids">Allowed Chat IDs (comma-separated)</label>
+            <input type="text" id="tg-allowed-ids" placeholder="e.g. 123456789" autocomplete="off" />
+            <small class="modal-desc">Message <code>/id</code> to your bot on Telegram to discover your Chat ID. Only listed IDs can control your device.</small>
+          </div>
+
+          <div class="modal-footer">
+            <span class="save-msg" id="tg-save-msg"></span>
+            <button type="submit" class="send-btn">Save Telegram Settings</button>
+          </div>
+        </div>
+      </form>
+
+      <!-- Tab 5: Security (Login & 2FA) -->
       <div class="modal-body tab-panel hidden" id="tab-panel-security">
         <div class="security-card">
           <div class="security-card-head">

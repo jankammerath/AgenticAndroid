@@ -4,6 +4,7 @@ mod bridge;
 mod llm;
 mod server;
 mod state;
+mod telegram;
 
 use crate::bridge::DeviceBridge;
 use crate::server::start_http_server;

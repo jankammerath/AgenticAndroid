@@ -3,6 +3,7 @@ use crate::auth;
 use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
 use crate::state::{now_ms, AppState, Provider, Session};
+use crate::telegram::spawn_telegram_worker;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -35,6 +36,7 @@ pub async fn start_http_server(
     port: u16,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<(), String> {
+    let tg_handle = spawn_telegram_worker(state.clone(), bridge.clone());
     let ctx = ServerCtx { state, bridge };
 
     let cors = CorsLayer::new()
@@ -91,13 +93,15 @@ pub async fn start_http_server(
 
     log::info!("Agentic Android Rust webserver listening on http://{addr}");
 
-    axum::serve(listener, app)
+    let res = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             let _ = (&mut shutdown_rx).await;
             log::info!("Shutting down Agentic Android webserver");
         })
         .await
-        .map_err(|e| format!("Server error: {e}"))
+        .map_err(|e| format!("Server error: {e}"));
+    tg_handle.abort();
+    res
 }
 
 async fn serve_index(State(ctx): State<ServerCtx>) -> Html<String> {
@@ -552,6 +556,7 @@ struct SafeConfigResponse {
     gemini_google_search: bool,
     gemini_google_maps: bool,
     system_prompt: String,
+    telegram: Value,
 }
 
 fn mask_key(key: &str) -> String {
@@ -570,6 +575,7 @@ fn mask_key(key: &str) -> String {
 
 async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse> {
     let cfg = ctx.state.config.read().await.clone();
+    let tg_status = ctx.state.telegram_status.read().await.clone();
     Json(SafeConfigResponse {
         api_keys_configured: json!({
             "claude": !cfg.api_keys.claude.trim().is_empty(),
@@ -591,7 +597,21 @@ async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse
         gemini_google_search: cfg.gemini_google_search,
         gemini_google_maps: cfg.gemini_google_maps,
         system_prompt: cfg.system_prompt,
+        telegram: json!({
+            "enabled": cfg.telegram.enabled,
+            "token_configured": !cfg.telegram.bot_token.trim().is_empty(),
+            "token_masked": mask_key(&cfg.telegram.bot_token),
+            "allowed_chat_ids": cfg.telegram.allowed_chat_ids,
+            "status": tg_status,
+        }),
     })
+}
+
+#[derive(Deserialize)]
+struct TelegramConfigPatch {
+    enabled: Option<bool>,
+    bot_token: Option<String>,
+    allowed_chat_ids: Option<Vec<i64>>,
 }
 
 #[derive(Deserialize)]
@@ -605,6 +625,7 @@ struct UpdateConfigRequest {
     gemini_google_search: Option<bool>,
     gemini_google_maps: Option<bool>,
     system_prompt: Option<String>,
+    telegram: Option<TelegramConfigPatch>,
 }
 
 #[derive(Deserialize)]
@@ -660,6 +681,17 @@ async fn api_update_config(
         }
         if let Some(prompt) = req.system_prompt {
             cfg.system_prompt = prompt;
+        }
+        if let Some(tg) = req.telegram {
+            if let Some(en) = tg.enabled {
+                cfg.telegram.enabled = en;
+            }
+            if let Some(tok) = tg.bot_token {
+                cfg.telegram.bot_token = tok.trim().to_string();
+            }
+            if let Some(ids) = tg.allowed_chat_ids {
+                cfg.telegram.allowed_chat_ids = ids;
+            }
         }
     }
     ctx.state.save_config().await;

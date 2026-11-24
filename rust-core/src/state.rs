@@ -85,6 +85,16 @@ pub struct AuthConfig {
     pub totp_secret: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TelegramConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub bot_token: String,
+    #[serde(default)]
+    pub allowed_chat_ids: Vec<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
@@ -107,6 +117,8 @@ pub struct AppConfig {
     pub system_prompt: String,
     #[serde(default)]
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub telegram: TelegramConfig,
 }
 
 fn default_provider() -> Provider {
@@ -151,6 +163,7 @@ impl Default for AppConfig {
             gemini_google_maps: true,
             system_prompt: default_system_prompt(),
             auth: AuthConfig::default(),
+            telegram: TelegramConfig::default(),
         }
     }
 }
@@ -253,6 +266,8 @@ pub struct AppState {
     pub active_runs: Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
     pub auth_tokens: RwLock<HashMap<String, u64>>, // token -> expires_at_ms
     pub pending_totp_secret: RwLock<Option<String>>,
+    pub telegram_status: RwLock<String>,
+    pub telegram_sessions: Mutex<HashMap<i64, String>>, // chat_id -> session_id
     pub http_client: reqwest::Client,
 }
 
@@ -298,6 +313,8 @@ impl AppState {
             active_runs: Mutex::new(HashMap::new()),
             auth_tokens: RwLock::new(auth_tokens),
             pending_totp_secret: RwLock::new(None),
+            telegram_status: RwLock::new("Disabled".to_string()),
+            telegram_sessions: Mutex::new(HashMap::new()),
             http_client,
         })
     }
