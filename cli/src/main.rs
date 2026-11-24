@@ -836,13 +836,33 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         "==> [4/5] Installing APK ({}) & configuring Accessibility Service...",
         apk_path.display()
     );
-    let status = Command::new(&adb)
+    let install_out = Command::new(&adb)
         .args(["install", "-r"])
         .arg(apk_path)
-        .status()
+        .output()
         .map_err(|e| format!("Failed to run adb install: {e}"))?;
-    if !status.success() {
-        return Err("adb install failed.".into());
+
+    if !install_out.status.success() {
+        let stderr = String::from_utf8_lossy(&install_out.stderr);
+        let stdout = String::from_utf8_lossy(&install_out.stdout);
+        let combined = format!("{stdout}\n{stderr}");
+        if combined.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
+            eprintln!(
+                "    Existing package signature mismatch; uninstalling old {APP_PACKAGE} and reinstalling..."
+            );
+            let _ = Command::new(&adb).args(["uninstall", APP_PACKAGE]).status();
+            let retry = Command::new(&adb)
+                .args(["install", "-r"])
+                .arg(apk_path)
+                .status()
+                .map_err(|e| format!("Failed to retry adb install: {e}"))?;
+            if !retry.success() {
+                return Err("adb install failed after uninstalling incompatible package.".into());
+            }
+        } else {
+            eprintln!("{combined}");
+            return Err("adb install failed.".into());
+        }
     }
 
     // Allow restricted settings (required on Android 13+ for sideloaded Accessibility services)
