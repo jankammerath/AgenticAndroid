@@ -9,7 +9,7 @@ object NativeBridge {
         System.loadLibrary("agentic_android")
     }
 
-    external fun nativeStartServer(port: Int, configDir: String, backupDir: String, callback: Any): Boolean
+    external fun nativeStartServer(port: Int, configDir: String, backupDir: String, backupSecret: String, callback: Any): Boolean
     external fun nativeStopServer()
     external fun nativeIsServerRunning(): Boolean
     external fun nativeGetServerPort(): Int

@@ -301,6 +301,7 @@ pub enum AgentEvent {
 pub struct AppState {
     pub config_dir: PathBuf,
     pub backup_dir: Option<PathBuf>,
+    pub backup_secret: Option<String>,
     pub port: u16,
     pub config: RwLock<AppConfig>,
     pub sessions: RwLock<Vec<Session>>,
@@ -318,7 +319,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config_dir: PathBuf, backup_dir: Option<PathBuf>, port: u16) -> Arc<Self> {
+    pub fn new(
+        config_dir: PathBuf,
+        backup_dir: Option<PathBuf>,
+        backup_secret: Option<String>,
+        port: u16,
+    ) -> Arc<Self> {
         let _ = std::fs::create_dir_all(&config_dir);
         if let Some(ref bdir) = backup_dir {
             let _ = std::fs::create_dir_all(bdir);
@@ -396,6 +402,7 @@ impl AppState {
         Arc::new(Self {
             config_dir,
             backup_dir,
+            backup_secret,
             port,
             config: RwLock::new(config),
             sessions: RwLock::new(sessions),

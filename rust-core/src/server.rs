@@ -97,6 +97,10 @@ pub async fn start_http_server(
         .route("/api/auth/status", get(api_auth_status))
         .route("/api/auth/login", post(api_auth_login))
         .route("/api/auth/logout", post(api_auth_logout))
+        .route(
+            "/api/internal/backup",
+            get(api_internal_backup).post(api_internal_restore),
+        )
         .merge(protected_routes)
         .layer(cors)
         .with_state(ctx);
@@ -492,6 +496,92 @@ async fn api_auth_mfa_disable(State(ctx): State<ServerCtx>) -> Json<Value> {
     *ctx.state.pending_totp_secret.write().await = None;
     ctx.state.save_config().await;
     Json(json!({ "ok": true, "mfa_enabled": false }))
+}
+
+fn verify_backup_secret(state: &Arc<AppState>, headers: &HeaderMap) -> bool {
+    let Some(ref expected) = state.backup_secret else {
+        return false;
+    };
+    let Some(provided) = headers.get("x-backup-secret").and_then(|v| v.to_str().ok()) else {
+        return false;
+    };
+    !expected.is_empty() && provided == expected
+}
+
+async fn api_internal_backup(
+    State(ctx): State<ServerCtx>,
+    headers: HeaderMap,
+) -> Response {
+    if !verify_backup_secret(&ctx.state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+    let config = ctx.state.config.read().await.clone();
+    let sessions = ctx.state.sessions.read().await.clone();
+    let auth_tokens = ctx.state.auth_tokens.read().await.clone();
+    let app_playbooks = ctx.state.app_playbooks.read().await.clone();
+    Json(json!({
+        "config": config,
+        "sessions": sessions,
+        "auth_tokens": auth_tokens,
+        "app_playbooks": app_playbooks
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct RestoreBackupPayload {
+    config: Option<crate::state::AppConfig>,
+    sessions: Option<Vec<Session>>,
+    auth_tokens: Option<std::collections::HashMap<String, u64>>,
+    app_playbooks: Option<std::collections::HashMap<String, AppPlaybook>>,
+}
+
+async fn api_internal_restore(
+    State(ctx): State<ServerCtx>,
+    headers: HeaderMap,
+    Json(payload): Json<RestoreBackupPayload>,
+) -> Response {
+    if !verify_backup_secret(&ctx.state, &headers) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+    // Only restore if current state appears freshly initialized (no auth & no API keys)
+    {
+        let cur = ctx.state.config.read().await;
+        let already_configured = cur.auth.enabled
+            || !cur.api_keys.claude.is_empty()
+            || !cur.api_keys.gemini.is_empty()
+            || !cur.api_keys.grok.is_empty()
+            || !cur.api_keys.openai.is_empty();
+        if already_configured {
+            return Json(json!({ "ok": true, "restored": false, "reason": "already_configured" }))
+                .into_response();
+        }
+    }
+
+    if let Some(cfg) = payload.config {
+        *ctx.state.config.write().await = cfg;
+        ctx.state.save_config().await;
+    }
+    if let Some(sessions) = payload.sessions {
+        if !sessions.is_empty() {
+            *ctx.state.sessions.write().await = sessions;
+            ctx.state.save_sessions().await;
+        }
+    }
+    if let Some(tokens) = payload.auth_tokens {
+        let now = now_ms();
+        let valid: std::collections::HashMap<String, u64> =
+            tokens.into_iter().filter(|(_, exp)| *exp > now).collect();
+        *ctx.state.auth_tokens.write().await = valid;
+        ctx.state.save_auth_tokens().await;
+    }
+    if let Some(playbooks) = payload.app_playbooks {
+        *ctx.state.app_playbooks.write().await = playbooks;
+        ctx.state.save_app_playbooks().await;
+    }
+
+    log::info!("Restored Agentic Android state from host backup");
+    Json(json!({ "ok": true, "restored": true })).into_response()
 }
 
 async fn api_health() -> Json<Value> {

@@ -56,6 +56,10 @@ class MainActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences("agentic_prefs", Context.MODE_PRIVATE)
         val savedPort = intent.getIntExtra("port", prefs.getInt("port", 8080))
+        val backupSecret = intent.getStringExtra("backup_secret")
+        if (!backupSecret.isNullOrBlank()) {
+            prefs.edit().putString("backup_secret", backupSecret).apply()
+        }
         editPort.setText(savedPort.toString())
 
         findViewById<Button>(R.id.btnStartServer).setOnClickListener {
@@ -117,9 +121,14 @@ class MainActivity : AppCompatActivity() {
             .putInt("port", port)
             .apply()
 
+        val secret = getSharedPreferences("agentic_prefs", Context.MODE_PRIVATE)
+            .getString("backup_secret", "") ?: ""
         val svcIntent = Intent(this, AgentForegroundService::class.java).apply {
             action = AgentForegroundService.ACTION_START_SERVER
             putExtra(AgentForegroundService.EXTRA_PORT, port)
+            if (secret.isNotBlank()) {
+                putExtra(AgentForegroundService.EXTRA_BACKUP_SECRET, secret)
+            }
         }
         ContextCompat.startForegroundService(this, svcIntent)
         txtServerStatus.postDelayed({ refreshUi() }, 300)

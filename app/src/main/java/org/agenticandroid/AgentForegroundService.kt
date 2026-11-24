@@ -43,6 +43,7 @@ class AgentForegroundService : Service() {
         const val ACTION_STOP_SERVER = "org.agenticandroid.STOP_SERVER"
         const val ACTION_START_MEDIA = "org.agenticandroid.START_MEDIA"
         const val EXTRA_PORT = "port"
+        const val EXTRA_BACKUP_SECRET = "backup_secret"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
 
@@ -98,7 +99,9 @@ class AgentForegroundService : Service() {
                     try {
                         startAsForeground(port, withMediaProjection = true)
                         if (!NativeBridge.nativeIsServerRunning()) {
-                            NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), NativeBridge)
+                            val secret = getSharedPreferences("agentic_prefs", Context.MODE_PRIVATE)
+                                .getString("backup_secret", "") ?: ""
+                            NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), secret, NativeBridge)
                             startFallbackPoller()
                         }
                         startMediaCast(code, data)
@@ -113,8 +116,16 @@ class AgentForegroundService : Service() {
             }
             else -> {
                 val port = intent?.getIntExtra(EXTRA_PORT, 8080) ?: 8080
+                val secretFromIntent = intent?.getStringExtra(EXTRA_BACKUP_SECRET)
+                val prefs = getSharedPreferences("agentic_prefs", Context.MODE_PRIVATE)
+                val secret = if (!secretFromIntent.isNullOrBlank()) {
+                    prefs.edit().putString("backup_secret", secretFromIntent).apply()
+                    secretFromIntent
+                } else {
+                    prefs.getString("backup_secret", "") ?: ""
+                }
                 startAsForeground(port, withMediaProjection = isMediaCastActive)
-                NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), NativeBridge)
+                NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), secret, NativeBridge)
                 startFallbackPoller()
                 return START_STICKY
             }

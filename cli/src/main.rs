@@ -886,77 +886,117 @@ fn wait_for_emulator_boot(
     Err("Timed out waiting for Android emulator to finish booting.".into())
 }
 
-const DEVICE_BACKUP_DIR: &str = "/sdcard/Android/data/org.agenticandroid/files/state_backup";
-const STATE_FILES: &[&str] = &[
-    "config.json",
-    "sessions.json",
-    "auth_tokens.json",
-    "app_playbooks.json",
-];
+fn ensure_backup_secret(state_dir: &Path) -> String {
+    let _ = fs::create_dir_all(state_dir);
+    let key_path = state_dir.join("backup.key");
+    if let Ok(existing) = fs::read_to_string(&key_path) {
+        let trimmed = existing.trim().to_string();
+        if trimmed.len() >= 16 {
+            return trimmed;
+        }
+    }
+    let mut bytes = [0u8; 24];
+    if let Ok(mut f) = fs::File::open("/dev/urandom") {
+        let _ = f.read_exact(&mut bytes);
+    } else {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(42);
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = ((nanos >> ((i % 16) * 8)) & 0xff) as u8 ^ (i as u8).wrapping_mul(37);
+        }
+    }
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    let _ = fs::write(&key_path, format!("{hex}\n"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600));
+    }
+    hex
+}
 
 fn pull_app_state_backup(cfg: &EffectiveConfig) {
     let host_dir = cfg.state_dir.join("state_backup");
     if fs::create_dir_all(&host_dir).is_err() {
         return;
     }
-    let adb = adb_bin(&cfg.android_home);
-    let mut pulled = 0usize;
-    for fname in STATE_FILES {
-        let remote = format!("{DEVICE_BACKUP_DIR}/{fname}");
-        let local = host_dir.join(fname);
-        if let Ok(out) = Command::new(&adb)
-            .args(["pull", &remote])
-            .arg(&local)
-            .output()
-        {
-            if out.status.success() {
-                pulled += 1;
-            }
-        }
-    }
-    if pulled > 0 {
-        println!(
-            "    Backed up {pulled} state file(s) to {}",
-            host_dir.display()
-        );
-    }
-}
+    let secret = ensure_backup_secret(&cfg.state_dir);
+    let url = format!("http://127.0.0.1:{}/api/internal/backup", cfg.port);
+    let tmp_path = host_dir.join("backup.json.tmp");
+    let dst_path = host_dir.join("backup.json");
 
-fn push_app_state_backup(cfg: &EffectiveConfig) {
-    let host_dir = cfg.state_dir.join("state_backup");
-    if !host_dir.join("config.json").exists() {
-        return;
-    }
-    let adb = adb_bin(&cfg.android_home);
-    let _ = Command::new(&adb)
-        .args(["shell", "mkdir", "-p", DEVICE_BACKUP_DIR])
-        .status();
-    let mut pushed = 0usize;
-    for fname in STATE_FILES {
-        let local = host_dir.join(fname);
-        if local.exists() {
-            let remote = format!("{DEVICE_BACKUP_DIR}/{fname}");
-            if let Ok(out) = Command::new(&adb)
-                .arg("push")
-                .arg(&local)
-                .arg(&remote)
-                .output()
-            {
-                if out.status.success() {
-                    pushed += 1;
+    if let Ok(out) = Command::new("curl")
+        .args([
+            "-fsS",
+            "--max-time",
+            "5",
+            "-H",
+            &format!("X-Backup-Secret: {secret}"),
+            "-o",
+        ])
+        .arg(&tmp_path)
+        .arg(&url)
+        .output()
+    {
+        if out.status.success() {
+            if let Ok(meta) = fs::metadata(&tmp_path) {
+                if meta.len() > 20 {
+                    let _ = fs::rename(&tmp_path, &dst_path);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = fs::set_permissions(&dst_path, fs::Permissions::from_mode(0o600));
+                    }
+                    return;
                 }
             }
         }
     }
-    if pushed > 0 {
-        println!("    Restored {pushed} state file(s) from host backup.");
+    let _ = fs::remove_file(&tmp_path);
+}
+
+fn restore_app_state_backup(cfg: &EffectiveConfig) {
+    let src_path = cfg.state_dir.join("state_backup/backup.json");
+    if !src_path.exists() {
+        return;
+    }
+    let secret = ensure_backup_secret(&cfg.state_dir);
+    let url = format!("http://127.0.0.1:{}/api/internal/backup", cfg.port);
+    if let Ok(out) = Command::new("curl")
+        .args([
+            "-fsS",
+            "--max-time",
+            "10",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "-H",
+            &format!("X-Backup-Secret: {secret}"),
+            "--data-binary",
+        ])
+        .arg(format!("@{}", src_path.display()))
+        .arg(&url)
+        .output()
+    {
+        if out.status.success() {
+            let body = String::from_utf8_lossy(&out.stdout);
+            if body.contains("\"restored\":true") {
+                println!(
+                    "    Restored Agentic Android state from host backup ({}).",
+                    src_path.display()
+                );
+            }
+        }
     }
 }
 
 fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), String> {
     let adb = adb_bin(&cfg.android_home);
 
-    // Always pull latest state backup from the device BEFORE installing or uninstalling
+    // Pull latest state backup over HTTP if the old app is currently reachable
     pull_app_state_backup(cfg);
 
     println!(
@@ -969,7 +1009,6 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         .output()
         .map_err(|e| format!("Failed to run adb install: {e}"))?;
 
-    let mut reinstalled = false;
     if !install_out.status.success() {
         let stderr = String::from_utf8_lossy(&install_out.stderr);
         let stdout = String::from_utf8_lossy(&install_out.stdout);
@@ -987,17 +1026,10 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
             if !retry.success() {
                 return Err("adb install failed after uninstalling incompatible package.".into());
             }
-            reinstalled = true;
         } else {
             eprintln!("{combined}");
             return Err("adb install failed.".into());
         }
-    }
-
-    // Push host backup back onto the device before starting the app so state is preserved
-    // across uninstall/reinstall or freshly created AVDs
-    if reinstalled || cfg.state_dir.join("state_backup/config.json").exists() {
-        push_app_state_backup(cfg);
     }
 
     // Allow restricted settings (required on Android 13+ for sideloaded Accessibility services)
@@ -1023,6 +1055,7 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
     );
     ensure_port_forwarded(&cfg.android_home, cfg.port)?;
 
+    let backup_secret = ensure_backup_secret(&cfg.state_dir);
     let status = Command::new(&adb)
         .args([
             "shell",
@@ -1037,6 +1070,9 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
             "--ei",
             "port",
             &cfg.port.to_string(),
+            "--es",
+            "backup_secret",
+            &backup_secret,
         ])
         .status()
         .map_err(|e| format!("Failed to launch MainActivity: {e}"))?;
@@ -1260,6 +1296,8 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         cfg.port
     );
     if wait_for_health(cfg.port, 25) {
+        restore_app_state_backup(&cfg);
+        pull_app_state_backup(&cfg);
         println!();
         println!("============================================================");
         println!(" Agentic Android is running!");
@@ -1347,9 +1385,19 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         let _ = Command::new(adb_bin(&cfg.android_home))
             .args(["emu", "kill"])
             .status();
-        thread::sleep(Duration::from_secs(2));
-        let _ = child.kill();
-        let _ = child.wait();
+        // Give QEMU up to 20s to flush userdata-qemu.img cleanly before force-killing
+        let mut exited = false;
+        for _ in 0..40 {
+            if let Ok(Some(_)) = child.try_wait() {
+                exited = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(500));
+        }
+        if !exited {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
     let pid_file = cfg.state_dir.join("daemon.pid");
     let _ = fs::remove_file(pid_file);

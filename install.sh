@@ -143,6 +143,18 @@ yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
   "system-images;android-35;google_apis_playstore;${ANDROID_ABI}"
 
 echo "==> [3/6] Downloading & installing/upgrading latest Agentic Android package..."
+# Snapshot live state from currently running server before upgrading
+if [ -f "$STATE_DIR/backup.key" ]; then
+  mkdir -p "$STATE_DIR/state_backup"
+  BACKUP_KEY="$(tr -d '\r\n' < "$STATE_DIR/backup.key")"
+  if [ -n "$BACKUP_KEY" ]; then
+    curl -fsS --max-time 5 -H "X-Backup-Secret: $BACKUP_KEY" \
+      "http://127.0.0.1:${PORT}/api/internal/backup" \
+      -o "$STATE_DIR/state_backup/backup.json.tmp" 2>/dev/null && \
+      mv "$STATE_DIR/state_backup/backup.json.tmp" "$STATE_DIR/state_backup/backup.json" && \
+      chmod 600 "$STATE_DIR/state_backup/backup.json" || rm -f "$STATE_DIR/state_backup/backup.json.tmp"
+  fi
+fi
 TMP_PKG_DIR="$(mktemp -d)"
 if [ "$PKG_MGR" = "apt" ]; then
   PKG_FILE="$TMP_PKG_DIR/agentic-android.deb"
