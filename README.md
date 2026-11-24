@@ -55,6 +55,29 @@ Then open `http://localhost:8080` in your computer's browser.
 
 ---
 
+## Telegram Bot Remote Control
+
+Agentic Android includes a built-in Telegram bot (powered by Rust long-polling — no port forwarding or webhooks required) so you can control your Android device from anywhere over Wi-Fi or cellular.
+
+### Setup
+
+1. **Create a bot**: Open Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot`, and follow the prompts to copy your **Bot Token** (`123456789:AAH...`).
+2. **Connect in Agentic Android**: Open the Web UI → **Settings → Telegram**, paste your **Bot Token**, check **Enable Telegram Bot**, and click **Save Telegram Settings**. The status badge will change to `Connected (@your_bot)`.
+3. **Authorize your Chat ID**: Open your new bot in Telegram and send `/id`. Copy the numeric Chat ID it replies with, paste it into **Allowed Chat IDs** in **Settings → Telegram** (comma-separated if adding multiple IDs), and click **Save Telegram Settings**.
+4. **Control your phone**: Send any natural-language task to your bot — responses and any captured/cropped screenshots are sent right back in Telegram, and the conversation is synced in the Web UI Sessions list.
+
+### Bot Commands
+
+| Command | Description |
+| --- | --- |
+| `/id` or `/start` | Display your Telegram Chat ID and authorization status |
+| `/status` | Show device name, Accessibility status, and default provider/model |
+| `/screenshot` | Capture and send the current Android screen as a photo |
+| `/new` | Start a fresh agent session for this Telegram chat |
+| `/stop` | Stop the currently running agent task |
+
+---
+
 ## Development & Running in the Android Emulator
 
 ### Prerequisites
