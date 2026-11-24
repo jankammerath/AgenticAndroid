@@ -353,11 +353,17 @@ async fn api_create_session(
     Json(req): Json<CreateSessionRequest>,
 ) -> Json<Session> {
     let cfg = ctx.state.config.read().await.clone();
-    let provider = req.provider.unwrap_or(cfg.default_provider);
+    let provider = req.provider.unwrap_or_else(|| cfg.default_provider.clone());
     let model = req
         .model
         .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| provider.default_model().to_string());
+        .unwrap_or_else(|| {
+            if provider == cfg.default_provider && !cfg.default_model.trim().is_empty() {
+                cfg.default_model.clone()
+            } else {
+                provider.default_model().to_string()
+            }
+        });
     let title = req
         .title
         .filter(|t| !t.trim().is_empty())

@@ -52,10 +52,15 @@
     addKeyProvider: document.getElementById("add-key-provider"),
     addKeyInput: document.getElementById("add-key-input"),
     configuredKeysList: document.getElementById("configured-keys-list"),
-    settingsBehaviorForm: document.getElementById("settings-behavior-form"),
-    settingsSaveMsg: document.getElementById("settings-save-msg"),
+    keysSaveMsg: document.getElementById("keys-save-msg"),
     tabPanelKeys: document.getElementById("tab-panel-keys"),
+    tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
+    cfgDefaultProvider: document.getElementById("cfg-default-provider"),
+    cfgDefaultModel: document.getElementById("cfg-default-model"),
+    cfgModelSourceHint: document.getElementById("cfg-model-source-hint"),
+    btnRefreshDefaultModels: document.getElementById("btn-refresh-default-models"),
+    settingsSaveMsg: document.getElementById("settings-save-msg"),
     promptSaveMsg: document.getElementById("prompt-save-msg"),
     uitreeModal: document.getElementById("uitree-modal"),
     btnCloseUitree: document.getElementById("btn-close-uitree"),
@@ -452,10 +457,78 @@
     }
   }
 
+  function populateDefaultModels(providerId, selectedModel, modelsOverride = null, source = null) {
+    const cached = state.providerModelsCache[providerId];
+    const p = state.providers.find((x) => x.id === providerId);
+    const models = modelsOverride || cached?.models || (p ? p.models : []);
+    const effSource = source || cached?.source || "fallback";
+
+    els.cfgDefaultModel.innerHTML = "";
+    let hasSelected = false;
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      if (m === selectedModel) {
+        opt.selected = true;
+        hasSelected = true;
+      }
+      els.cfgDefaultModel.appendChild(opt);
+    }
+
+    if (selectedModel && !hasSelected) {
+      const opt = document.createElement("option");
+      opt.value = selectedModel;
+      opt.textContent = selectedModel;
+      opt.selected = true;
+      els.cfgDefaultModel.prepend(opt);
+    }
+
+    if (effSource === "api") {
+      els.cfgModelSourceHint.textContent = `${models.length} models`;
+      els.cfgModelSourceHint.className = "model-source-hint live";
+    } else if (effSource === "loading") {
+      els.cfgModelSourceHint.textContent = "Loading...";
+      els.cfgModelSourceHint.className = "model-source-hint";
+    } else {
+      els.cfgModelSourceHint.textContent = "Add API key";
+      els.cfgModelSourceHint.className = "model-source-hint";
+    }
+  }
+
+  async function fetchDefaultModels(providerId, preferredModel = null, force = false) {
+    if (!force && state.providerModelsCache[providerId]?.source === "api") {
+      const models = state.providerModelsCache[providerId].models || [];
+      const target =
+        preferredModel && models.includes(preferredModel)
+          ? preferredModel
+          : models[0] || preferredModel || "";
+      populateDefaultModels(providerId, target, models, "api");
+      return;
+    }
+
+    populateDefaultModels(providerId, preferredModel, null, "loading");
+    try {
+      const data = await api(`/api/providers/${encodeURIComponent(providerId)}/models`);
+      state.providerModelsCache[providerId] = data;
+      if (els.cfgDefaultProvider.value === providerId) {
+        const models = data.models || [];
+        const target =
+          preferredModel && models.includes(preferredModel)
+            ? preferredModel
+            : models[0] || preferredModel || "";
+        populateDefaultModels(providerId, target, models, data.source);
+      }
+    } catch (err) {
+      populateDefaultModels(providerId, preferredModel, null, "fallback");
+    }
+  }
+
   async function loadConfig() {
     state.config = await api("/api/config");
     renderConfiguredKeys();
-    document.getElementById("cfg-default-provider").value = state.config.default_provider;
+    els.cfgDefaultProvider.value = state.config.default_provider;
+    populateDefaultModels(state.config.default_provider, state.config.default_model);
     document.getElementById("cfg-max-steps").value = state.config.max_agent_steps;
     document.getElementById("cfg-step-delay").value = state.config.step_delay_ms;
     document.getElementById("cfg-include-screenshot").checked = !!state.config.include_screenshot;
@@ -809,7 +882,11 @@
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
     els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
+    els.tabPanelModels.classList.toggle("hidden", tabName !== "models");
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
+    if (tabName === "models") {
+      fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
+    }
   };
 
   document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -817,6 +894,7 @@
   });
 
   const openSettings = () => {
+    els.keysSaveMsg.textContent = "";
     els.settingsSaveMsg.textContent = "";
     els.promptSaveMsg.textContent = "";
     setSettingsTab("keys");
@@ -843,13 +921,25 @@
     if (active) {
       await fetchModelsForProvider(active.provider, true);
     }
-    els.settingsSaveMsg.textContent = `${PROVIDER_LABELS[provider] || provider} key saved!`;
+    els.keysSaveMsg.textContent = `${PROVIDER_LABELS[provider] || provider} key saved!`;
   });
 
-  els.settingsBehaviorForm.addEventListener("submit", async (e) => {
+  els.cfgDefaultProvider.addEventListener("change", () => {
+    const provider = els.cfgDefaultProvider.value;
+    const preferred =
+      state.config?.default_provider === provider ? state.config.default_model : null;
+    fetchDefaultModels(provider, preferred);
+  });
+
+  els.btnRefreshDefaultModels.addEventListener("click", () => {
+    fetchDefaultModels(els.cfgDefaultProvider.value, els.cfgDefaultModel.value, true);
+  });
+
+  els.tabPanelModels.addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = {
-      default_provider: document.getElementById("cfg-default-provider").value,
+      default_provider: els.cfgDefaultProvider.value,
+      default_model: els.cfgDefaultModel.value,
       max_agent_steps: parseInt(document.getElementById("cfg-max-steps").value, 10) || 15,
       step_delay_ms: parseInt(document.getElementById("cfg-step-delay").value, 10) || 600,
       include_screenshot: document.getElementById("cfg-include-screenshot").checked,
@@ -859,7 +949,7 @@
       body: JSON.stringify(payload),
     });
     await loadConfig();
-    els.settingsSaveMsg.textContent = "Saved!";
+    els.settingsSaveMsg.textContent = "Model settings saved!";
   });
 
   els.tabPanelPrompt.addEventListener("submit", async (e) => {

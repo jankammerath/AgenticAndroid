@@ -136,10 +136,11 @@
 
       <div class="modal-tabs" role="tablist">
         <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">Agent Keys</button>
+        <button type="button" class="tab-btn" data-tab="models" role="tab" aria-selected="false">Models</button>
         <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">System Prompt</button>
       </div>
 
-      <!-- Tab 1: Agent Keys & Agent Behavior -->
+      <!-- Tab 1: Agent Keys -->
       <div class="modal-body tab-panel" id="tab-panel-keys">
         <p class="modal-desc">
           Manage API keys for AI providers. Switch provider and model per session directly from the prompt box.
@@ -160,42 +161,61 @@
           </div>
         </form>
 
-        <form id="settings-behavior-form" class="behavior-section">
-          <div class="settings-row">
-            <div class="field">
-              <label for="cfg-default-provider">Default Provider</label>
-              <select id="cfg-default-provider">
-                <option value="claude">Claude (Anthropic)</option>
-                <option value="gemini">Gemini (Google)</option>
-                <option value="grok">Grok (xAI)</option>
-                <option value="openai">OpenAI</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="cfg-max-steps">Max Steps</label>
-              <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
-            </div>
-            <div class="field">
-              <label for="cfg-step-delay">Step Delay (ms)</label>
-              <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
-            </div>
-          </div>
-
-          <div class="field checkbox-field">
-            <label>
-              <input type="checkbox" id="cfg-include-screenshot" checked />
-              Send live device screenshot with each agent step
-            </label>
-          </div>
-
-          <div class="modal-footer">
-            <span class="save-msg" id="settings-save-msg"></span>
-            <button type="submit" class="send-btn">Save Settings</button>
-          </div>
-        </form>
+        <div class="modal-footer">
+          <span class="save-msg" id="keys-save-msg"></span>
+        </div>
       </div>
 
-      <!-- Tab 2: System Prompt -->
+      <!-- Tab 2: Models & Agent Behavior -->
+      <form class="modal-body tab-panel hidden" id="tab-panel-models">
+        <p class="modal-desc">
+          Choose the default provider and model used when creating new sessions, along with agent execution settings.
+        </p>
+
+        <div class="models-default-grid">
+          <div class="field">
+            <label for="cfg-default-provider">Default Provider</label>
+            <select id="cfg-default-provider">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+              <option value="grok">Grok (xAI)</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cfg-default-model">Default Model <span class="model-source-hint" id="cfg-model-source-hint"></span></label>
+            <div class="default-model-row">
+              <select id="cfg-default-model"></select>
+              <button type="button" class="ghost-icon-btn" id="btn-refresh-default-models" title="Refresh models from provider API">&#8635;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row settings-row-2">
+          <div class="field">
+            <label for="cfg-max-steps">Max Steps</label>
+            <input type="number" id="cfg-max-steps" min="1" max="50" value="15" />
+          </div>
+          <div class="field">
+            <label for="cfg-step-delay">Step Delay (ms)</label>
+            <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
+          </div>
+        </div>
+
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="cfg-include-screenshot" checked />
+            Send live device screenshot with each agent step
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <span class="save-msg" id="settings-save-msg"></span>
+          <button type="submit" class="send-btn">Save Settings</button>
+        </div>
+      </form>
+
+      <!-- Tab 3: System Prompt -->
       <form class="modal-body tab-panel hidden" id="tab-panel-prompt">
         <p class="modal-desc">
           Customize the system instructions given to the AI agent before it controls your Android device.

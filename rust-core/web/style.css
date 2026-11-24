@@ -960,11 +960,21 @@ html, body {
   min-width: 0;
 }
 
-.behavior-section {
+.models-default-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 12px;
+}
+
+.default-model-row {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-top: 4px;
+  align-items: center;
+  gap: 6px;
+}
+
+.default-model-row select {
+  flex: 1;
+  min-width: 0;
 }
 
 .prompt-field textarea {
@@ -977,6 +987,10 @@ html, body {
   display: grid;
   grid-template-columns: 1.5fr 1fr 1fr;
   gap: 12px;
+}
+
+.settings-row-2 {
+  grid-template-columns: 1fr 1fr;
 }
 
 .field {
