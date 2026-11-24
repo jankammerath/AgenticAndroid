@@ -99,6 +99,9 @@ cargo build --release --manifest-path cli/Cargo.toml
 # Build from source and launch in the emulator
 ./launch.sh --avd Pixel_9a --port 8080
 
+# Terminate any running emulator (and stop daemon if active)
+./launch.sh stop
+
 # Install from a prebuilt APK instead of building from source
 ./launch.sh --apk AgenticAndroid.apk --avd Pixel_9a
 

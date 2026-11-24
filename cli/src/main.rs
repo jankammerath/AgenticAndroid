@@ -34,6 +34,17 @@ enum Commands {
     /// Build (or use --apk), launch emulator, install app, enable Accessibility, and forward port
     Run(RunOpts),
 
+    /// Terminate any running Android emulator (and stop daemon if active)
+    #[command(alias = "kill")]
+    Stop {
+        /// Optional specific emulator serial (e.g. emulator-5554); defaults to all running emulators
+        #[arg(short, long)]
+        serial: Option<String>,
+        /// Directory for PID and log files
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+    },
+
     /// Manage the background supervisor daemon (ideal for headless Linux servers)
     Daemon {
         #[command(subcommand)]
@@ -149,6 +160,7 @@ fn main() {
 
     let res = match cli.command {
         Some(Commands::Avds) => cmd_list_avds(),
+        Some(Commands::Stop { serial, state_dir }) => cmd_stop_emulator(serial, state_dir),
         Some(Commands::Daemon { action }) => match action {
             DaemonAction::Start(opts) => cmd_daemon_start(opts),
             DaemonAction::Stop { state_dir } => cmd_daemon_stop(state_dir),
@@ -354,6 +366,67 @@ fn avdmanager_bin(android_home: &Path) -> PathBuf {
         return latest;
     }
     android_home.join("cmdline-tools/bin/avdmanager")
+}
+
+fn find_running_emulators(android_home: &Path) -> Vec<String> {
+    let Ok(out) = Command::new(adb_bin(android_home))
+        .arg("devices")
+        .output()
+    else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let serial = parts.next()?;
+            let state = parts.next()?;
+            if serial.starts_with("emulator-") && (state == "device" || state == "offline") {
+                Some(serial.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn cmd_stop_emulator(serial: Option<String>, state_dir: Option<PathBuf>) -> Result<(), String> {
+    // Stop background daemon first if running so it does not restart the emulator
+    let dir = state_dir.clone().unwrap_or_else(default_state_dir);
+    if dir.join("daemon.pid").exists() {
+        let _ = cmd_daemon_stop(state_dir);
+    }
+
+    let android_home = detect_android_home(None)?;
+    let adb = adb_bin(&android_home);
+    let targets = match serial {
+        Some(s) => vec![s],
+        None => find_running_emulators(&android_home),
+    };
+
+    if targets.is_empty() {
+        println!("No running Android emulators found.");
+        return Ok(());
+    }
+
+    for emu in &targets {
+        println!("Stopping emulator '{emu}'...");
+        let _ = Command::new(&adb).args(["-s", emu, "emu", "kill"]).status();
+    }
+
+    // Wait briefly for emulators to exit
+    for _ in 0..15 {
+        let remaining = find_running_emulators(&android_home);
+        if targets.iter().all(|t| !remaining.contains(t)) {
+            println!("Emulator(s) terminated.");
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+
+    println!("Sent shutdown signal to emulator(s): {}", targets.join(", "));
+    Ok(())
 }
 
 fn cmd_list_avds() -> Result<(), String> {
@@ -669,6 +742,11 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         return Err("adb install failed.".into());
     }
 
+    // Allow restricted settings (required on Android 13+ for sideloaded Accessibility services)
+    let _ = Command::new(&adb)
+        .args(["shell", "appops", "set", APP_PACKAGE, "ACCESS_RESTRICTED_SETTINGS", "allow"])
+        .status();
+
     // Grant runtime permissions
     for perm in [
         "android.permission.RECORD_AUDIO",
@@ -708,44 +786,140 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         return Err("Failed to start MainActivity via adb.".into());
     }
 
+    // Re-verify accessibility binding after force-stop/start (-S)
+    ensure_accessibility_enabled(&cfg.android_home)?;
+
     Ok(())
+}
+
+fn is_accessibility_bound(android_home: &Path) -> bool {
+    let Ok(out) = Command::new(adb_bin(android_home))
+        .args(["shell", "dumpsys", "accessibility"])
+        .output()
+    else {
+        return false;
+    };
+    let dump = String::from_utf8_lossy(&out.stdout);
+    for line in dump.lines() {
+        if line.contains("Bound services:")
+            && (line.contains(APP_PACKAGE) || line.contains("Agentic Android Control"))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn ensure_accessibility_enabled(android_home: &Path) -> Result<(), String> {
     let adb = adb_bin(android_home);
-    let out = Command::new(&adb)
-        .args([
-            "shell",
-            "settings",
-            "get",
-            "secure",
-            "enabled_accessibility_services",
-        ])
-        .output()
-        .map_err(|e| format!("Failed to query accessibility settings: {e}"))?;
-    let existing = String::from_utf8_lossy(&out.stdout).trim().to_string();
 
-    let new_services = if existing.is_empty() || existing == "null" {
-        ACCESSIBILITY_SERVICE.to_string()
-    } else if existing.split(':').any(|s| s == ACCESSIBILITY_SERVICE) {
-        existing
-    } else {
-        format!("{existing}:{ACCESSIBILITY_SERVICE}")
-    };
-
+    // Ensure restricted settings are allowed on Android 13+
     let _ = Command::new(&adb)
         .args([
             "shell",
-            "settings",
-            "put",
-            "secure",
-            "enabled_accessibility_services",
-            &new_services,
+            "appops",
+            "set",
+            APP_PACKAGE,
+            "ACCESS_RESTRICTED_SETTINGS",
+            "allow",
         ])
         .status();
-    let _ = Command::new(&adb)
-        .args(["shell", "settings", "put", "secure", "accessibility_enabled", "1"])
-        .status();
+
+    if is_accessibility_bound(android_home) {
+        return Ok(());
+    }
+
+    for attempt in 1..=5 {
+        let out = Command::new(&adb)
+            .args([
+                "shell",
+                "settings",
+                "get",
+                "secure",
+                "enabled_accessibility_services",
+            ])
+            .output()
+            .map_err(|e| format!("Failed to query accessibility settings: {e}"))?;
+        let existing = String::from_utf8_lossy(&out.stdout).trim().to_string();
+
+        // Filter out our own service (and any legacy com.agenticandroid entry) so toggling forces rebind
+        let others: Vec<&str> = if existing.is_empty() || existing == "null" {
+            Vec::new()
+        } else {
+            existing
+                .split(':')
+                .filter(|s| {
+                    !s.is_empty()
+                        && !s.contains(APP_PACKAGE)
+                        && !s.contains("com.agenticandroid")
+                })
+                .collect()
+        };
+
+        // Step 1: Temporarily write without our service so Android's ContentObserver sees a real change
+        let without_ours = others.join(":");
+        if without_ours.is_empty() {
+            let _ = Command::new(&adb)
+                .args([
+                    "shell",
+                    "settings",
+                    "delete",
+                    "secure",
+                    "enabled_accessibility_services",
+                ])
+                .status();
+        } else {
+            let _ = Command::new(&adb)
+                .args([
+                    "shell",
+                    "settings",
+                    "put",
+                    "secure",
+                    "enabled_accessibility_services",
+                    &without_ours,
+                ])
+                .status();
+        }
+        thread::sleep(Duration::from_millis(400));
+
+        // Step 2: Write with our service enabled and accessibility_enabled = 1
+        let mut with_ours = others;
+        with_ours.push(ACCESSIBILITY_SERVICE);
+        let new_services = with_ours.join(":");
+
+        let _ = Command::new(&adb)
+            .args([
+                "shell",
+                "settings",
+                "put",
+                "secure",
+                "enabled_accessibility_services",
+                &new_services,
+            ])
+            .status();
+        let _ = Command::new(&adb)
+            .args([
+                "shell",
+                "settings",
+                "put",
+                "secure",
+                "accessibility_enabled",
+                "1",
+            ])
+            .status();
+
+        thread::sleep(Duration::from_millis(800));
+        if is_accessibility_bound(android_home) {
+            println!("    Accessibility Service bound and active.");
+            return Ok(());
+        }
+        if attempt < 5 {
+            println!("    Waiting for Accessibility Service to bind (attempt {attempt}/5)...");
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+
+    eprintln!("WARNING: Accessibility Service enabled in settings, but Android has not reported it bound yet.");
     Ok(())
 }
 
@@ -870,6 +1044,12 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                 }
                 continue;
             }
+        }
+
+        // Ensure accessibility stays bound even if app health is OK
+        if !is_accessibility_bound(&cfg.android_home) {
+            eprintln!("Accessibility Service unbound; re-enabling...");
+            let _ = ensure_accessibility_enabled(&cfg.android_home);
         }
 
         // Ensure port forward, accessibility, and app health
