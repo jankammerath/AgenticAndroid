@@ -286,11 +286,7 @@ async fn create_telegram_session(state: &Arc<AppState>, chat_id: i64) -> String 
     } else {
         cfg.default_provider.default_model().to_string()
     };
-    let session = Session::new(
-        format!("Telegram ({chat_id})"),
-        cfg.default_provider,
-        model,
-    );
+    let session = Session::new_telegram(chat_id, cfg.default_provider, model);
     let sid = session.id.clone();
     {
         let mut sessions = state.sessions.write().await;
@@ -302,6 +298,9 @@ async fn create_telegram_session(state: &Arc<AppState>, chat_id: i64) -> String 
         .lock()
         .await
         .insert(chat_id, sid.clone());
+    let _ = state
+        .event_tx
+        .send(AgentEvent::SessionUpdated { session_id: sid.clone() });
     sid
 }
 

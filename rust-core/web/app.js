@@ -221,11 +221,15 @@
   function renderSessions() {
     els.sessionList.innerHTML = "";
     for (const s of state.sessions) {
+      const isTelegram = s.source === "telegram" || !!s.telegram_chat_id;
+      const tgBadge = isTelegram
+        ? `<span class="session-source-badge" title="Telegram Bot Session">TG</span>`
+        : "";
       const item = document.createElement("div");
       item.className = `session-item ${s.id === state.activeSessionId ? "active" : ""}`;
       item.innerHTML = `
         <div class="session-meta">
-          <div class="session-title">${escapeHtml(s.title)}</div>
+          <div class="session-title-row">${tgBadge}<span class="session-title">${escapeHtml(s.title)}</span></div>
           <div class="session-sub">${escapeHtml(s.provider)} · ${escapeHtml(s.model)}</div>
         </div>
         <button class="session-del" title="Delete session">&times;</button>

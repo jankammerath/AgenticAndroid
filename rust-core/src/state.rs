@@ -185,12 +185,20 @@ pub struct ChatMessage {
     pub timestamp_ms: u64,
 }
 
+fn default_session_source() -> String {
+    "web".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
     pub title: String,
     pub provider: Provider,
     pub model: String,
+    #[serde(default = "default_session_source")]
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telegram_chat_id: Option<i64>,
     pub messages: Vec<ChatMessage>,
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
@@ -204,6 +212,23 @@ impl Session {
             title,
             provider,
             model,
+            source: "web".to_string(),
+            telegram_chat_id: None,
+            messages: Vec::new(),
+            created_at_ms: now,
+            updated_at_ms: now,
+        }
+    }
+
+    pub fn new_telegram(chat_id: i64, provider: Provider, model: String) -> Self {
+        let now = now_ms();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            title: format!("Telegram ({chat_id})"),
+            provider,
+            model,
+            source: "telegram".to_string(),
+            telegram_chat_id: Some(chat_id),
             messages: Vec::new(),
             created_at_ms: now,
             updated_at_ms: now,
@@ -301,6 +326,13 @@ impl AppState {
         let now = now_ms();
         auth_tokens.retain(|_, &mut exp| exp > now);
 
+        let mut telegram_sessions = HashMap::new();
+        for s in &sessions {
+            if let Some(chat_id) = s.telegram_chat_id {
+                telegram_sessions.entry(chat_id).or_insert_with(|| s.id.clone());
+            }
+        }
+
         Arc::new(Self {
             config_dir,
             port,
@@ -314,7 +346,7 @@ impl AppState {
             auth_tokens: RwLock::new(auth_tokens),
             pending_totp_secret: RwLock::new(None),
             telegram_status: RwLock::new("Disabled".to_string()),
-            telegram_sessions: Mutex::new(HashMap::new()),
+            telegram_sessions: Mutex::new(telegram_sessions),
             http_client,
         })
     }
