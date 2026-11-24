@@ -17,6 +17,10 @@
 
 [![GitHub Sponsor](https://img.shields.io/badge/sponsor-30363D?style=flat&logo=GitHub-Sponsors&logoColor=ea4aaa)](https://github.com/sponsors/jankammerath)
 
+- **📱 Real Phone, Real Actions:** Runs directly on Android with native Android Accessibility control to tap, swipe, type, and launch apps—no root or desktop VM needed.
+- **⚡ Rust-Powered Performance:** Driven by a lightweight NDK Rust core and embedded webserver that runs smoothly in the background.
+- **🧠 Bring Your Own Brain:** Works out of the box with **Claude, Gemini, Grok, and OpenAI**, complete with a live interactive screen & audio stream.
+
 Agentic Android is an app built in **Rust** with a minimal **Kotlin** app frontend, serving an embedded webserver with a modern web interface. It uses Android's Accessibility Services to observe and control the phone, exposing human-like interactions — tap, double tap, long press, swipe, text input, app launching, and system navigation — to your configured AI agent.
 
 <table>
