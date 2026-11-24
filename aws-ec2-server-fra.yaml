@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Agentic Android headless Linux server on AWS EC2 (eu-central-1 / Frankfurt)
+  using m8i.xlarge with KVM nested virtualization, Ubuntu x86_64, 80 GB gp3,
+  and SSH/HTTP/HTTPS open to 0.0.0.0/0.
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 Key Pair to use for SSH access
+
+  InstanceType:
+    Type: String
+    Default: m8i.xlarge
+    AllowedValues:
+      - m8i.xlarge
+      - m8i.2xlarge
+      - c8i.xlarge
+      - c8i.2xlarge
+    Description: EC2 instance type (8th-gen Intel with nested virtualization support)
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-05e5fa80bad7f28e0
+    Description: Ubuntu 64-bit x86 AMI ID in eu-central-1 (Frankfurt)
+
+  RootVolumeSizeGiB:
+    Type: Number
+    Default: 80
+    MinValue: 30
+    MaxValue: 1000
+    Description: Root EBS gp3 volume size in GiB
+
+Resources:
+  AgenticAndroidSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH (22), HTTP (80), and HTTPS (443) from anywhere
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP and Let's Encrypt ACME challenge
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS Web UI access
+      Tags:
+        - Key: Name
+          Value: AgenticAndroid-SG-FRA
+
+  AgenticAndroidLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-lt"
+      LaunchTemplateData:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        CpuOptions:
+          NestedVirtualization: enabled
+        SecurityGroupIds:
+          - !GetAtt AgenticAndroidSecurityGroup.GroupId
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: !Ref RootVolumeSizeGiB
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
+
+  AgenticAndroidInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AgenticAndroidLaunchTemplate
+        Version: !GetAtt AgenticAndroidLaunchTemplate.LatestVersionNumber
+      Tags:
+        - Key: Name
+          Value: AgenticAndroid-Server-FRA
+
+Outputs:
+  Region:
+    Description: Deployed AWS Region (deploy this stack in eu-central-1)
+    Value: !Ref AWS::Region
+
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref AgenticAndroidInstance
+
+  PublicIp:
+    Description: Public IPv4 address of the server
+    Value: !GetAtt AgenticAndroidInstance.PublicIp
+
+  PublicDnsName:
+    Description: Public DNS hostname of the server
+    Value: !GetAtt AgenticAndroidInstance.PublicDnsName
+
+  SshCommand:
+    Description: SSH command to connect to the Ubuntu instance
+    Value: !Sub "ssh -i ${KeyName}.pem ubuntu@${AgenticAndroidInstance.PublicIp}"
+
+  InstallCommand:
+    Description: Run this on the server after connecting via SSH
+    Value: "curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | sudo bash"
