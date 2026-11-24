@@ -88,19 +88,40 @@ Agentic Android includes a built-in Telegram bot (powered by Rust long-polling â
 - **Android SDK & NDK** (NDK `27.x`)
 - **JDK 17+** (or Android Studio's bundled JBR)
 
-### Launch Script
+### Rust CLI & Headless Daemon (`cli/`)
 
-The included `launch.sh` builds the Rust NDK library, compiles the Android APK, boots an emulator, installs the app, enables the Accessibility Service automatically, and forwards port `8080`:
+Agentic Android includes a Rust CLI (`agentic-android`, wrapped by `./launch.sh`) that builds from source or installs a prebuilt APK, launches an Android emulator (GUI or headless), grants permissions, enables Accessibility Services, forwards the port, and can run as a supervised background daemon on macOS or Linux:
 
 ```bash
-# Launch using the default phone AVD
-./launch.sh
+# Build the Rust CLI (or run ./launch.sh which builds it automatically)
+cargo build --release --manifest-path cli/Cargo.toml
 
-# Specify a particular AVD and/or port
+# Build from source and launch in the emulator
 ./launch.sh --avd Pixel_9a --port 8080
 
-# Build only without launching an emulator
-./launch.sh --build-only
+# Install from a prebuilt APK instead of building from source
+./launch.sh --apk AgenticAndroid.apk --avd Pixel_9a
+
+# Run headless as a background supervisor daemon (ideal for Linux servers)
+./launch.sh daemon start --headless --avd Pixel_9a --apk AgenticAndroid.apk --port 8080
+./launch.sh daemon status
+./launch.sh daemon stop
+
+# Generate a Linux systemd service unit for headless operation
+./launch.sh daemon systemd --avd Pixel_9a --apk /opt/agentic/AgenticAndroid.apk --port 8080
+
+# List available AVDs
+./launch.sh avds
+```
+
+You can also store defaults in `~/.agentic-android/config.toml` (or pass `--config <path>`):
+
+```toml
+avd = "Pixel_9a"
+apk = "/opt/agentic/AgenticAndroid.apk"
+port = 8080
+headless = true
+android_home = "/opt/android-sdk"
 ```
 
 Once running, open **http://localhost:8080** in your browser.
