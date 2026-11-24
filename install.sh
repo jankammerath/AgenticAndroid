@@ -100,9 +100,14 @@ echo "==> [1/6] Installing KVM, Java, and Android emulator dependencies ($PKG_MG
 if [ "$PKG_MGR" = "apt" ]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
+  if [ "$ANDROID_ABI" = "arm64-v8a" ]; then
+    QEMU_PKG="qemu-system-arm"
+  else
+    QEMU_PKG="qemu-system-x86"
+  fi
   apt-get install -y \
     ca-certificates curl unzip openssl \
-    qemu-kvm libvirt-daemon-system bridge-utils \
+    "$QEMU_PKG" libvirt-daemon-system bridge-utils \
     openjdk-17-jre-headless \
     libpulse0 libgl1 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6
 else

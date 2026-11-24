@@ -99,7 +99,7 @@ The Android emulator requires hardware virtualization (**KVM**) on Linux (`x86_6
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  qemu-kvm libvirt-daemon-system bridge-utils cpu-checker \
+  qemu-system-x86 libvirt-daemon-system bridge-utils cpu-checker \
   openjdk-17-jre-headless unzip curl \
   libpulse0 libgl1 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6
 
