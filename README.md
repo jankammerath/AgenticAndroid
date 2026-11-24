@@ -1,6 +1,6 @@
 # Agentic Android
 
-> [!WARNING]
+> [!NOTE]
 > **Stop trapping your AI agent in a browser tab. Give it a real phone.**  
 > AI agents don't need a beige box—they need a smartphone just like you to tap, swipe, and actually get things done.
 
