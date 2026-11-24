@@ -235,11 +235,19 @@ async fn handle_incoming_message(
         return;
     }
 
-    // Regular prompt -> run agent turn
-    let _ = send_typing(&state.http_client, &token, chat_id).await;
-    let session_id = get_or_create_telegram_session(&state, chat_id).await;
+    // Regular prompt -> run agent turn while continuously refreshing Telegram "typing..." indicator
+    let typing_client = state.http_client.clone();
+    let typing_token = token.clone();
+    let typing_handle = tokio::spawn(async move {
+        loop {
+            let _ = send_typing(&typing_client, &typing_token, chat_id).await;
+            sleep(Duration::from_secs(4)).await;
+        }
+    });
 
+    let session_id = get_or_create_telegram_session(&state, chat_id).await;
     run_agent_turn(state.clone(), bridge, session_id.clone(), text).await;
+    typing_handle.abort();
 
     // Fetch latest assistant/error message from the session
     let last_msg = {
