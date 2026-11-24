@@ -24,6 +24,7 @@
     badgeVideo: document.getElementById("badge-video"),
     btnAudioToggle: document.getElementById("btn-audio-toggle"),
     btnOpenSettings: document.getElementById("btn-open-settings"),
+    btnLogout: document.getElementById("btn-logout"),
     btnCloseSettings: document.getElementById("btn-close-settings"),
     btnWarnSettings: document.getElementById("btn-warn-settings"),
     btnNewSession: document.getElementById("btn-new-session"),
@@ -56,6 +57,30 @@
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
+    tabPanelSecurity: document.getElementById("tab-panel-security"),
+    secAuthBadge: document.getElementById("sec-auth-badge"),
+    secMfaBadge: document.getElementById("sec-mfa-badge"),
+    secCredentialsForm: document.getElementById("sec-credentials-form"),
+    secUsername: document.getElementById("sec-username"),
+    secPassword: document.getElementById("sec-password"),
+    btnSaveCredentials: document.getElementById("btn-save-credentials"),
+    btnDisableAuth: document.getElementById("btn-disable-auth"),
+    secMfaCard: document.getElementById("sec-mfa-card"),
+    btnSetupMfa: document.getElementById("btn-setup-mfa"),
+    btnDisableMfa: document.getElementById("btn-disable-mfa"),
+    secMfaSetupBox: document.getElementById("sec-mfa-setup-box"),
+    secMfaQr: document.getElementById("sec-mfa-qr"),
+    secMfaSecret: document.getElementById("sec-mfa-secret"),
+    secMfaVerifyForm: document.getElementById("sec-mfa-verify-form"),
+    secMfaCode: document.getElementById("sec-mfa-code"),
+    secMsg: document.getElementById("sec-msg"),
+    loginOverlay: document.getElementById("login-overlay"),
+    loginForm: document.getElementById("login-form"),
+    loginUsername: document.getElementById("login-username"),
+    loginPassword: document.getElementById("login-password"),
+    loginMfaField: document.getElementById("login-mfa-field"),
+    loginTotp: document.getElementById("login-totp"),
+    loginError: document.getElementById("login-error"),
     cfgDefaultProvider: document.getElementById("cfg-default-provider"),
     cfgDefaultModel: document.getElementById("cfg-default-model"),
     cfgModelSourceHint: document.getElementById("cfg-model-source-hint"),
@@ -67,15 +92,27 @@
     uitreePre: document.getElementById("uitree-pre"),
   };
 
+  let appBooted = false;
+  let statusInterval = null;
+
   async function api(path, opts = {}) {
     const res = await fetch(path, {
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
       ...opts,
     });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      showLoginScreen();
+      throw new Error("Authentication required");
     }
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || `HTTP ${res.status}`);
+      err.data = data;
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   }
 
   function wsUrl(path) {
@@ -358,6 +395,37 @@
     return out.join("");
   }
 
+  function parseErrorDisplay(raw) {
+    let text = String(raw || "").trim().replace(/^Error:\s*/i, "");
+    let title = "Request failed";
+    let message = text;
+    let details = null;
+
+    const jsonIdx = text.indexOf("{");
+    if (jsonIdx !== -1) {
+      const prefix = text.slice(0, jsonIdx).replace(/:\s*$/, "").trim();
+      const jsonPart = text.slice(jsonIdx).trim();
+      try {
+        const parsed = JSON.parse(jsonPart);
+        const extracted =
+          parsed?.error?.message || parsed?.message || parsed?.detail || null;
+        if (extracted) {
+          if (prefix) title = prefix;
+          message = String(extracted).trim();
+          details = JSON.stringify(parsed, null, 2);
+          return { title, message, details };
+        }
+      } catch {}
+    }
+
+    const colonIdx = text.indexOf(": ");
+    if (colonIdx > 0 && colonIdx < 48) {
+      title = text.slice(0, colonIdx).trim();
+      message = text.slice(colonIdx + 2).trim();
+    }
+    return { title, message, details };
+  }
+
   function renderMessages() {
     const session = getActiveSession();
     els.chatMessages.innerHTML = "";
@@ -372,8 +440,28 @@
     }
 
     for (const m of session.messages) {
+      const isError = m.role === "error" || (m.role === "assistant" && /^Error:\s*/i.test(m.content || ""));
       const div = document.createElement("div");
-      div.className = `msg ${m.role}`;
+      div.className = `msg ${isError ? "error" : m.role}`;
+
+      if (isError) {
+        const err = parseErrorDisplay(m.content);
+        const detailsHtml = err.details
+          ? `<details class="error-details"><summary>Raw details</summary><pre>${escapeHtml(err.details)}</pre></details>`
+          : "";
+        div.innerHTML = `
+          <div class="error-card">
+            <div class="error-head">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>${escapeHtml(err.title)}</span>
+            </div>
+            <div class="error-body">${escapeHtml(err.message)}</div>
+            ${detailsHtml}
+          </div>`;
+        els.chatMessages.appendChild(div);
+        continue;
+      }
+
       let tracesHtml = "";
       if (m.tool_traces && m.tool_traces.length > 0) {
         const items = m.tool_traces
@@ -886,8 +974,11 @@
     els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
     els.tabPanelModels.classList.toggle("hidden", tabName !== "models");
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
+    els.tabPanelSecurity.classList.toggle("hidden", tabName !== "security");
     if (tabName === "models") {
       fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
+    } else if (tabName === "security") {
+      refreshAuthStatus();
     }
   };
 
@@ -899,6 +990,8 @@
     els.keysSaveMsg.textContent = "";
     els.settingsSaveMsg.textContent = "";
     els.promptSaveMsg.textContent = "";
+    els.secMsg.textContent = "";
+    els.secMfaSetupBox.classList.add("hidden");
     setSettingsTab("keys");
     els.settingsModal.classList.remove("hidden");
   };
@@ -967,6 +1060,135 @@
     els.promptSaveMsg.textContent = "System prompt saved!";
   });
 
+  // Security & Auth flows
+  function showLoginScreen(mfaEnabled = false) {
+    if (state.videoWs) { state.videoWs.close(); state.videoWs = null; }
+    if (state.audioWs) { state.audioWs.close(); state.audioWs = null; }
+    if (state.eventsWs) { state.eventsWs.close(); state.eventsWs = null; }
+    if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+    appBooted = false;
+    els.loginError.classList.add("hidden");
+    els.loginMfaField.classList.toggle("hidden", !mfaEnabled);
+    els.loginTotp.value = "";
+    els.loginOverlay.classList.remove("hidden");
+    els.loginUsername.focus();
+  }
+
+  async function refreshAuthStatus() {
+    const st = await api("/api/auth/status");
+    els.btnLogout.classList.toggle("hidden", !st.auth_enabled);
+    els.secAuthBadge.className = `status-pill ${st.auth_enabled ? "ok" : ""}`;
+    els.secAuthBadge.querySelector(".label").textContent = st.auth_enabled
+      ? `Enabled (${st.username || "active"})`
+      : "Disabled";
+    if (st.username) els.secUsername.value = st.username;
+    els.btnSaveCredentials.textContent = st.auth_enabled ? "Update Credentials" : "Enable Login";
+    els.btnDisableAuth.classList.toggle("hidden", !st.auth_enabled);
+
+    els.secMfaBadge.className = `status-pill ${st.mfa_enabled ? "ok" : ""}`;
+    els.secMfaBadge.querySelector(".label").textContent = st.mfa_enabled ? "Active" : "Off";
+    els.btnSetupMfa.disabled = !st.auth_enabled;
+    els.btnSetupMfa.style.opacity = st.auth_enabled ? "1" : "0.45";
+    els.btnSetupMfa.textContent = st.mfa_enabled ? "Reconfigure 2FA" : "Set Up 2FA";
+    els.btnDisableMfa.classList.toggle("hidden", !st.mfa_enabled);
+    return st;
+  }
+
+  els.secCredentialsForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.secMsg.textContent = "";
+    try {
+      await api("/api/auth/credentials", {
+        method: "POST",
+        body: JSON.stringify({
+          username: els.secUsername.value.trim(),
+          password: els.secPassword.value,
+        }),
+      });
+      els.secPassword.value = "";
+      await refreshAuthStatus();
+      els.secMsg.textContent = "Login credentials saved!";
+    } catch (err) {
+      els.secMsg.textContent = err.message;
+    }
+  });
+
+  els.btnDisableAuth.addEventListener("click", async () => {
+    await api("/api/auth/disable", { method: "POST" });
+    els.secMfaSetupBox.classList.add("hidden");
+    await refreshAuthStatus();
+    els.secMsg.textContent = "Login protection disabled.";
+  });
+
+  els.btnSetupMfa.addEventListener("click", async () => {
+    els.secMsg.textContent = "";
+    try {
+      const res = await api("/api/auth/mfa/setup", { method: "POST" });
+      els.secMfaQr.innerHTML = res.qr_svg;
+      els.secMfaSecret.textContent = res.secret;
+      els.secMfaCode.value = "";
+      els.secMfaSetupBox.classList.remove("hidden");
+      els.secMfaCode.focus();
+    } catch (err) {
+      els.secMsg.textContent = err.message;
+    }
+  });
+
+  els.secMfaVerifyForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.secMsg.textContent = "";
+    try {
+      await api("/api/auth/mfa/enable", {
+        method: "POST",
+        body: JSON.stringify({ code: els.secMfaCode.value.trim() }),
+      });
+      els.secMfaSetupBox.classList.add("hidden");
+      await refreshAuthStatus();
+      els.secMsg.textContent = "2FA enabled!";
+    } catch (err) {
+      els.secMsg.textContent = err.message;
+    }
+  });
+
+  els.btnDisableMfa.addEventListener("click", async () => {
+    await api("/api/auth/mfa/disable", { method: "POST" });
+    els.secMfaSetupBox.classList.add("hidden");
+    await refreshAuthStatus();
+    els.secMsg.textContent = "2FA disabled.";
+  });
+
+  els.btnLogout.addEventListener("click", async () => {
+    await api("/api/auth/logout", { method: "POST" });
+    const st = await api("/api/auth/status");
+    showLoginScreen(st.mfa_enabled);
+  });
+
+  els.loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.loginError.classList.add("hidden");
+    try {
+      await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: els.loginUsername.value.trim(),
+          password: els.loginPassword.value,
+          totp_code: els.loginTotp.value.trim(),
+        }),
+      });
+      els.loginPassword.value = "";
+      els.loginTotp.value = "";
+      els.loginOverlay.classList.add("hidden");
+      await bootApp();
+    } catch (err) {
+      if (err.data?.mfa_required) {
+        els.loginMfaField.classList.remove("hidden");
+        els.loginTotp.focus();
+      }
+      els.loginError.textContent = err.message || "Sign in failed";
+      els.loginError.classList.remove("hidden");
+    }
+  });
+
   function escapeHtml(str) {
     return String(str ?? "")
       .replace(/&/g, "&amp;")
@@ -975,15 +1197,27 @@
       .replace(/"/g, "&quot;");
   }
 
-  async function init() {
+  async function bootApp() {
+    if (appBooted) return;
+    appBooted = true;
+    await refreshAuthStatus();
     const pData = await api("/api/providers");
     state.providers = pData.providers || [];
     await loadConfig();
     await loadSessions();
     await refreshStatus();
-    setInterval(refreshStatus, 5000);
+    statusInterval = setInterval(refreshStatus, 5000);
     connectVideoWs();
     connectEventsWs();
+  }
+
+  async function init() {
+    const authSt = await api("/api/auth/status");
+    if (authSt.auth_enabled && !authSt.authenticated) {
+      showLoginScreen(authSt.mfa_enabled);
+      return;
+    }
+    await bootApp();
   }
 
   init().catch((err) => console.error("Init error:", err));

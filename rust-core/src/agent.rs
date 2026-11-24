@@ -48,8 +48,8 @@ pub async fn run_agent_turn(
         });
         let err_msg = ChatMessage {
             id: Uuid::new_v4().to_string(),
-            role: "assistant".to_string(),
-            content: format!("Error: {err}"),
+            role: "error".to_string(),
+            content: err,
             tool_traces: Vec::new(),
             timestamp_ms: now_ms(),
         };

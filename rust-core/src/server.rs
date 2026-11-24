@@ -1,10 +1,12 @@
 use crate::agent::{execute_device_tool, run_agent_turn};
+use crate::auth;
 use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
-use crate::state::{AppState, Provider, Session};
+use crate::state::{now_ms, AppState, Provider, Session};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
+use axum::extract::{Path, Request, State};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -40,13 +42,7 @@ pub async fn start_http_server(
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
-        .route("/", get(serve_index))
-        .route("/style.css", get(serve_css))
-        .route("/app.js", get(serve_js))
-        .route("/logo.png", get(serve_logo))
-        .route("/favicon.png", get(serve_favicon))
-        .route("/api/health", get(api_health))
+    let protected_routes = Router::new()
         .route("/api/status", get(api_status))
         .route("/api/config", get(api_get_config).put(api_update_config))
         .route("/api/providers", get(api_providers))
@@ -63,9 +59,27 @@ pub async fn start_http_server(
         .route("/api/device/action", post(api_device_action))
         .route("/api/device/ui-tree", get(api_ui_tree))
         .route("/api/device/screenshot", get(api_screenshot))
+        .route("/api/auth/credentials", post(api_auth_set_credentials))
+        .route("/api/auth/disable", post(api_auth_disable))
+        .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
+        .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
+        .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
         .route("/ws/video", get(ws_video))
         .route("/ws/audio", get(ws_audio))
         .route("/ws/events", get(ws_events))
+        .layer(middleware::from_fn_with_state(ctx.clone(), require_auth));
+
+    let app = Router::new()
+        .route("/", get(serve_index))
+        .route("/style.css", get(serve_css))
+        .route("/app.js", get(serve_js))
+        .route("/logo.png", get(serve_logo))
+        .route("/favicon.png", get(serve_favicon))
+        .route("/api/health", get(api_health))
+        .route("/api/auth/status", get(api_auth_status))
+        .route("/api/auth/login", post(api_auth_login))
+        .route("/api/auth/logout", post(api_auth_logout))
+        .merge(protected_routes)
         .layer(cors)
         .with_state(ctx);
 
@@ -124,6 +138,305 @@ async fn serve_logo() -> Response {
 
 async fn serve_favicon() -> Response {
     ([(header::CONTENT_TYPE, "image/png")], FAVICON_PNG).into_response()
+}
+
+const SESSION_COOKIE_NAME: &str = "agentic_session";
+const SESSION_TTL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+fn extract_session_cookie(headers: &HeaderMap) -> Option<String> {
+    let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
+    for part in cookie_header.split(';') {
+        let trimmed = part.trim();
+        if let Some(val) = trimmed.strip_prefix("agentic_session=") {
+            if !val.is_empty() {
+                return Some(val.to_string());
+            }
+        }
+    }
+    None
+}
+
+async fn is_request_authenticated(state: &Arc<AppState>, headers: &HeaderMap) -> bool {
+    let auth_enabled = state.config.read().await.auth.enabled;
+    if !auth_enabled {
+        return true;
+    }
+    let Some(token) = extract_session_cookie(headers) else {
+        return false;
+    };
+    let now = now_ms();
+    let tokens = state.auth_tokens.read().await;
+    tokens
+        .get(&token)
+        .map(|&exp| exp > now)
+        .unwrap_or(false)
+}
+
+async fn require_auth(
+    State(ctx): State<ServerCtx>,
+    req: Request,
+    next: Next,
+) -> Response {
+    if is_request_authenticated(&ctx.state, req.headers()).await {
+        return next.run(req).await;
+    }
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({ "ok": false, "error": "Authentication required" })),
+    )
+        .into_response()
+}
+
+fn make_session_cookie(token: &str) -> HeaderValue {
+    HeaderValue::from_str(&format!(
+        "{SESSION_COOKIE_NAME}={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800"
+    ))
+    .unwrap()
+}
+
+fn make_clear_cookie() -> HeaderValue {
+    HeaderValue::from_str(&format!(
+        "{SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+    ))
+    .unwrap()
+}
+
+async fn api_auth_status(
+    State(ctx): State<ServerCtx>,
+    headers: HeaderMap,
+) -> Json<Value> {
+    let auth_cfg = ctx.state.config.read().await.auth.clone();
+    let authenticated = is_request_authenticated(&ctx.state, &headers).await;
+    Json(json!({
+        "ok": true,
+        "auth_enabled": auth_cfg.enabled,
+        "mfa_enabled": auth_cfg.enabled && auth_cfg.mfa_enabled,
+        "authenticated": authenticated,
+        "username": if authenticated && auth_cfg.enabled { auth_cfg.username } else { String::new() }
+    }))
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+    #[serde(default)]
+    totp_code: String,
+}
+
+async fn api_auth_login(
+    State(ctx): State<ServerCtx>,
+    Json(req): Json<LoginRequest>,
+) -> Response {
+    let auth_cfg = ctx.state.config.read().await.auth.clone();
+    if !auth_cfg.enabled {
+        return Json(json!({ "ok": true, "authenticated": true })).into_response();
+    }
+
+    if req.username.trim() != auth_cfg.username
+        || !auth::verify_password(&req.password, &auth_cfg.password_salt, &auth_cfg.password_hash)
+    {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "ok": false, "error": "Invalid username or password." })),
+        )
+            .into_response();
+    }
+
+    if auth_cfg.mfa_enabled {
+        if req.totp_code.trim().is_empty() {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "mfa_required": true,
+                    "error": "Enter the 6-digit code from your authenticator app."
+                })),
+            )
+                .into_response();
+        }
+        if !auth::verify_totp(&auth_cfg.totp_secret, &req.totp_code) {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({
+                    "ok": false,
+                    "mfa_required": true,
+                    "error": "Invalid 2FA verification code."
+                })),
+            )
+                .into_response();
+        }
+    }
+
+    let token = auth::generate_session_token();
+    let expires_at = now_ms().saturating_add(SESSION_TTL_MS);
+    {
+        let mut tokens = ctx.state.auth_tokens.write().await;
+        tokens.retain(|_, &mut exp| exp > now_ms());
+        tokens.insert(token.clone(), expires_at);
+    }
+
+    let mut resp = Json(json!({ "ok": true, "authenticated": true })).into_response();
+    resp.headers_mut()
+        .insert(header::SET_COOKIE, make_session_cookie(&token));
+    resp
+}
+
+async fn api_auth_logout(
+    State(ctx): State<ServerCtx>,
+    headers: HeaderMap,
+) -> Response {
+    if let Some(token) = extract_session_cookie(&headers) {
+        ctx.state.auth_tokens.write().await.remove(&token);
+    }
+    let mut resp = Json(json!({ "ok": true })).into_response();
+    resp.headers_mut()
+        .insert(header::SET_COOKIE, make_clear_cookie());
+    resp
+}
+
+#[derive(Deserialize)]
+struct SetCredentialsRequest {
+    username: String,
+    password: String,
+}
+
+async fn api_auth_set_credentials(
+    State(ctx): State<ServerCtx>,
+    Json(req): Json<SetCredentialsRequest>,
+) -> Response {
+    let username = req.username.trim().to_string();
+    if username.is_empty() || req.password.len() < 4 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Username is required and password must be at least 4 characters." })),
+        )
+            .into_response();
+    }
+
+    let (salt, hash) = auth::hash_password(&req.password);
+    {
+        let mut cfg = ctx.state.config.write().await;
+        cfg.auth.enabled = true;
+        cfg.auth.username = username;
+        cfg.auth.password_salt = salt;
+        cfg.auth.password_hash = hash;
+    }
+    ctx.state.save_config().await;
+
+    let token = auth::generate_session_token();
+    let expires_at = now_ms().saturating_add(SESSION_TTL_MS);
+    {
+        let mut tokens = ctx.state.auth_tokens.write().await;
+        tokens.clear();
+        tokens.insert(token.clone(), expires_at);
+    }
+
+    let mut resp = Json(json!({ "ok": true, "auth_enabled": true })).into_response();
+    resp.headers_mut()
+        .insert(header::SET_COOKIE, make_session_cookie(&token));
+    resp
+}
+
+async fn api_auth_disable(State(ctx): State<ServerCtx>) -> Response {
+    {
+        let mut cfg = ctx.state.config.write().await;
+        cfg.auth.enabled = false;
+        cfg.auth.mfa_enabled = false;
+        cfg.auth.totp_secret.clear();
+        cfg.auth.password_salt.clear();
+        cfg.auth.password_hash.clear();
+    }
+    ctx.state.auth_tokens.write().await.clear();
+    *ctx.state.pending_totp_secret.write().await = None;
+    ctx.state.save_config().await;
+
+    let mut resp = Json(json!({ "ok": true, "auth_enabled": false })).into_response();
+    resp.headers_mut()
+        .insert(header::SET_COOKIE, make_clear_cookie());
+    resp
+}
+
+async fn api_auth_mfa_setup(State(ctx): State<ServerCtx>) -> Response {
+    let auth_cfg = ctx.state.config.read().await.auth.clone();
+    if !auth_cfg.enabled {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Enable username & password login before setting up 2FA." })),
+        )
+            .into_response();
+    }
+
+    let secret = auth::generate_totp_secret();
+    let uri = auth::build_otpauth_uri(&auth_cfg.username, &secret);
+    let qr_svg = match auth::render_qr_svg(&uri) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "ok": false, "error": e })),
+            )
+                .into_response();
+        }
+    };
+
+    *ctx.state.pending_totp_secret.write().await = Some(secret.clone());
+
+    Json(json!({
+        "ok": true,
+        "secret": secret,
+        "otpauth_uri": uri,
+        "qr_svg": qr_svg
+    }))
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct MfaVerifyRequest {
+    code: String,
+}
+
+async fn api_auth_mfa_enable(
+    State(ctx): State<ServerCtx>,
+    Json(req): Json<MfaVerifyRequest>,
+) -> Response {
+    let pending = ctx.state.pending_totp_secret.read().await.clone();
+    let Some(secret) = pending else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "No pending 2FA setup. Click 'Set Up 2FA' first." })),
+        )
+            .into_response();
+    };
+
+    if !auth::verify_totp(&secret, &req.code) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Invalid 6-digit code. Check your authenticator app and try again." })),
+        )
+            .into_response();
+    }
+
+    {
+        let mut cfg = ctx.state.config.write().await;
+        cfg.auth.mfa_enabled = true;
+        cfg.auth.totp_secret = secret;
+    }
+    *ctx.state.pending_totp_secret.write().await = None;
+    ctx.state.save_config().await;
+
+    Json(json!({ "ok": true, "mfa_enabled": true })).into_response()
+}
+
+async fn api_auth_mfa_disable(State(ctx): State<ServerCtx>) -> Json<Value> {
+    {
+        let mut cfg = ctx.state.config.write().await;
+        cfg.auth.mfa_enabled = false;
+        cfg.auth.totp_secret.clear();
+    }
+    *ctx.state.pending_totp_secret.write().await = None;
+    ctx.state.save_config().await;
+    Json(json!({ "ok": true, "mfa_enabled": false }))
 }
 
 async fn api_health() -> Json<Value> {

@@ -69,6 +69,22 @@ impl ApiKeys {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AuthConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password_salt: String,
+    #[serde(default)]
+    pub password_hash: String,
+    #[serde(default)]
+    pub mfa_enabled: bool,
+    #[serde(default)]
+    pub totp_secret: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
@@ -89,6 +105,8 @@ pub struct AppConfig {
     pub gemini_google_maps: bool,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
+    #[serde(default)]
+    pub auth: AuthConfig,
 }
 
 fn default_provider() -> Provider {
@@ -130,6 +148,7 @@ impl Default for AppConfig {
             gemini_google_search: true,
             gemini_google_maps: true,
             system_prompt: default_system_prompt(),
+            auth: AuthConfig::default(),
         }
     }
 }
@@ -230,6 +249,8 @@ pub struct AppState {
     pub audio_tx: broadcast::Sender<AudioChunk>,
     pub event_tx: broadcast::Sender<AgentEvent>,
     pub active_runs: Mutex<HashMap<String, tokio::sync::watch::Sender<bool>>>,
+    pub auth_tokens: RwLock<HashMap<String, u64>>, // token -> expires_at_ms
+    pub pending_totp_secret: RwLock<Option<String>>,
     pub http_client: reqwest::Client,
 }
 
@@ -267,6 +288,8 @@ impl AppState {
             audio_tx,
             event_tx,
             active_runs: Mutex::new(HashMap::new()),
+            auth_tokens: RwLock::new(HashMap::new()),
+            pending_totp_secret: RwLock::new(None),
             http_client,
         })
     }

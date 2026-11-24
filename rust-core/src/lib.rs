@@ -1,4 +1,5 @@
 mod agent;
+mod auth;
 mod bridge;
 mod llm;
 mod server;

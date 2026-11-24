@@ -376,6 +376,24 @@ pub async fn call_llm(
     }
 }
 
+fn format_api_error(provider_name: &str, status: reqwest::StatusCode, body: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<Value>(body) {
+        let msg = v["error"]["message"]
+            .as_str()
+            .or_else(|| v["message"].as_str())
+            .or_else(|| v["detail"].as_str());
+        if let Some(m) = msg {
+            return format!("{provider_name} ({}): {}", status.as_u16(), m.trim());
+        }
+    }
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        format!("{provider_name} ({status})")
+    } else {
+        format!("{provider_name} ({}): {trimmed}", status.as_u16())
+    }
+}
+
 async fn call_openai_compatible(
     client: &reqwest::Client,
     endpoint: &str,
@@ -481,7 +499,7 @@ async fn call_openai_compatible(
     let status = resp.status();
     let resp_text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
     if !status.is_success() {
-        return Err(format!("API error ({status}): {resp_text}"));
+        return Err(format_api_error("API error", status, &resp_text));
     }
 
     let data: Value =
@@ -607,7 +625,7 @@ async fn call_claude(
     let status = resp.status();
     let resp_text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
     if !status.is_success() {
-        return Err(format!("Claude API error ({status}): {resp_text}"));
+        return Err(format_api_error("Claude API error", status, &resp_text));
     }
 
     let data: Value =
@@ -743,13 +761,18 @@ async fn call_gemini(
             tools.push(json!({ "googleMaps": {} }));
         }
 
-        let body = json!({
+        let mut body = json!({
             "systemInstruction": {
                 "parts": [{ "text": system_prompt }]
             },
             "contents": contents,
             "tools": tools
         });
+        if use_search || use_maps {
+            body["toolConfig"] = json!({
+                "includeServerSideToolInvocations": true
+            });
+        }
 
         let resp = client
             .post(&endpoint)
@@ -771,11 +794,15 @@ async fn call_gemini(
                 || text.contains("googleMaps")
                 || text.contains("google_search")
                 || text.contains("googleSearch")
+                || text.contains("includeServerSideToolInvocations")
+                || text.contains("include_server_side_tool_invocations")
+                || text.contains("Built-in tools")
+                || text.contains("toolConfig")
                 || text.contains("Tool use with function calling")
                 || text.contains("unsupported")
                 || text.contains("not supported"));
 
-        last_err = format!("Gemini API error ({status}): {text}");
+        last_err = format_api_error("Gemini API error", status, &text);
         if !is_tool_compat_err {
             return Err(last_err);
         }
