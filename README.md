@@ -22,7 +22,6 @@ AI agents don't need a beige box—they need a smartphone just like you to tap, 
 
 - **🧠 Bring Your Own Brain:** Works out of the box with **Claude, Gemini, Grok, and OpenAI**, complete with a live interactive screen & audio stream.
 
-> [!INFO]
 > The application in the `rpm` and `deb` packages can operate as a cli and `systemd` service on Linux using the Android emulator instead of a pyhsical device. Use the `install.sh` script for a one-command install. If you want run the agent on a physical device, just install the `apk` file.
 
 Agentic Android is an app built in **Rust** with a minimal **Kotlin** app frontend, serving an embedded webserver with a modern web interface. It uses Android's Accessibility Services to observe and control the phone, exposing human-like interactions — tap, double tap, long press, swipe, text input, app launching, and system navigation — to your configured AI agent.
