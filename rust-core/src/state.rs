@@ -83,6 +83,10 @@ pub struct AppConfig {
     pub step_delay_ms: u64,
     #[serde(default = "default_include_screenshot")]
     pub include_screenshot: bool,
+    #[serde(default = "default_true")]
+    pub gemini_google_search: bool,
+    #[serde(default = "default_true")]
+    pub gemini_google_maps: bool,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
 }
@@ -100,6 +104,9 @@ fn default_step_delay_ms() -> u64 {
     600
 }
 fn default_include_screenshot() -> bool {
+    true
+}
+fn default_true() -> bool {
     true
 }
 fn default_system_prompt() -> String {
@@ -120,6 +127,8 @@ impl Default for AppConfig {
             max_agent_steps: default_max_steps(),
             step_delay_ms: default_step_delay_ms(),
             include_screenshot: default_include_screenshot(),
+            gemini_google_search: true,
+            gemini_google_maps: true,
             system_prompt: default_system_prompt(),
         }
     }

@@ -1,5 +1,5 @@
 use crate::bridge::DeviceBridge;
-use crate::llm::{call_llm, TurnMessage};
+use crate::llm::{call_llm, GeminiGroundingOptions, TurnMessage};
 use crate::state::{now_ms, AgentEvent, AppState, ChatMessage, ToolTrace};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -147,6 +147,10 @@ async fn execute_agent_loop(
             &model,
             &config.system_prompt,
             &turn_messages,
+            GeminiGroundingOptions {
+                google_search: config.gemini_google_search,
+                google_maps: config.gemini_google_maps,
+            },
         )
         .await?;
 

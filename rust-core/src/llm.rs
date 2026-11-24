@@ -314,6 +314,12 @@ pub async fn fetch_provider_models(
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GeminiGroundingOptions {
+    pub google_search: bool,
+    pub google_maps: bool,
+}
+
 pub async fn call_llm(
     client: &reqwest::Client,
     provider: &Provider,
@@ -321,6 +327,7 @@ pub async fn call_llm(
     model: &str,
     system_prompt: &str,
     messages: &[TurnMessage],
+    gemini_grounding: GeminiGroundingOptions,
 ) -> Result<LlmResponse, String> {
     if api_key.trim().is_empty() {
         return Err(format!(
@@ -356,7 +363,15 @@ pub async fn call_llm(
             call_claude(client, api_key, model, system_prompt, messages).await
         }
         Provider::Gemini => {
-            call_gemini(client, api_key, model, system_prompt, messages).await
+            call_gemini(
+                client,
+                api_key,
+                model,
+                system_prompt,
+                messages,
+                gemini_grounding,
+            )
+            .await
         }
     }
 }
@@ -638,6 +653,7 @@ async fn call_gemini(
     model: &str,
     system_prompt: &str,
     messages: &[TurnMessage],
+    grounding: GeminiGroundingOptions,
 ) -> Result<LlmResponse, String> {
     let mut contents: Vec<Value> = Vec::new();
 
@@ -697,33 +713,80 @@ async fn call_gemini(
     }
 
     let function_declarations = device_tool_definitions();
-    let body = json!({
-        "systemInstruction": {
-            "parts": [{ "text": system_prompt }]
-        },
-        "contents": contents,
-        "tools": [{
-            "functionDeclarations": function_declarations
-        }]
-    });
-
     let endpoint = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
         model.trim(),
         api_key.trim()
     );
 
-    let resp = client
-        .post(&endpoint)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("HTTP error: {e}"))?;
+    // Build fallback plan in case a specific Gemini model rejects combined grounding tools
+    let mut attempts: Vec<(bool, bool)> = vec![(grounding.google_search, grounding.google_maps)];
+    if grounding.google_maps {
+        attempts.push((grounding.google_search, false));
+    }
+    if grounding.google_search || grounding.google_maps {
+        attempts.push((false, false));
+    }
 
-    let status = resp.status();
-    let resp_text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
-    if !status.is_success() {
-        return Err(format!("Gemini API error ({status}): {resp_text}"));
+    let mut resp_text = String::new();
+    let mut last_err = String::new();
+    let mut succeeded = false;
+
+    for (use_search, use_maps) in attempts {
+        let mut tools = vec![json!({
+            "functionDeclarations": function_declarations
+        })];
+        if use_search {
+            tools.push(json!({ "googleSearch": {} }));
+        }
+        if use_maps {
+            tools.push(json!({ "googleMaps": {} }));
+        }
+
+        let body = json!({
+            "systemInstruction": {
+                "parts": [{ "text": system_prompt }]
+            },
+            "contents": contents,
+            "tools": tools
+        });
+
+        let resp = client
+            .post(&endpoint)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("HTTP error: {e}"))?;
+
+        let status = resp.status();
+        let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+        if status.is_success() {
+            resp_text = text;
+            succeeded = true;
+            break;
+        }
+
+        let is_tool_compat_err = status.as_u16() == 400
+            && (text.contains("google_maps")
+                || text.contains("googleMaps")
+                || text.contains("google_search")
+                || text.contains("googleSearch")
+                || text.contains("Tool use with function calling")
+                || text.contains("unsupported")
+                || text.contains("not supported"));
+
+        last_err = format!("Gemini API error ({status}): {text}");
+        if !is_tool_compat_err {
+            return Err(last_err);
+        }
+        log::warn!(
+            "Gemini grounding combination (search={use_search}, maps={use_maps}) rejected by model {}; retrying with fallback",
+            model
+        );
+    }
+
+    if !succeeded {
+        return Err(last_err);
     }
 
     let data: Value =
@@ -751,8 +814,43 @@ async fn call_gemini(
         }
     }
 
+    let mut final_text = text_parts.join("\n");
+
+    // Append Google Search & Google Maps grounding citations if present
+    if tool_calls.is_empty() {
+        if let Some(chunks) = data["candidates"][0]["groundingMetadata"]["groundingChunks"].as_array() {
+            let mut sources: Vec<String> = Vec::new();
+            for chunk in chunks {
+                if let Some(web) = chunk.get("web") {
+                    if let Some(uri) = web["uri"].as_str() {
+                        let title = web["title"].as_str().unwrap_or(uri);
+                        let entry = format!("- [{title}]({uri})");
+                        if !sources.contains(&entry) {
+                            sources.push(entry);
+                        }
+                    }
+                } else if let Some(maps) = chunk.get("maps") {
+                    if let Some(uri) = maps["uri"].as_str() {
+                        let title = maps["title"].as_str().unwrap_or("Google Maps");
+                        let entry = format!("- [{title} (Google Maps)]({uri})");
+                        if !sources.contains(&entry) {
+                            sources.push(entry);
+                        }
+                    }
+                }
+            }
+            if !sources.is_empty() {
+                if !final_text.is_empty() {
+                    final_text.push_str("\n\n");
+                }
+                final_text.push_str("**Sources:**\n");
+                final_text.push_str(&sources.join("\n"));
+            }
+        }
+    }
+
     Ok(LlmResponse {
-        text: text_parts.join("\n"),
+        text: final_text,
         tool_calls,
     })
 }

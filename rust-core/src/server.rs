@@ -231,6 +231,8 @@ struct SafeConfigResponse {
     max_agent_steps: usize,
     step_delay_ms: u64,
     include_screenshot: bool,
+    gemini_google_search: bool,
+    gemini_google_maps: bool,
     system_prompt: String,
 }
 
@@ -268,6 +270,8 @@ async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse
         max_agent_steps: cfg.max_agent_steps,
         step_delay_ms: cfg.step_delay_ms,
         include_screenshot: cfg.include_screenshot,
+        gemini_google_search: cfg.gemini_google_search,
+        gemini_google_maps: cfg.gemini_google_maps,
         system_prompt: cfg.system_prompt,
     })
 }
@@ -280,6 +284,8 @@ struct UpdateConfigRequest {
     max_agent_steps: Option<usize>,
     step_delay_ms: Option<u64>,
     include_screenshot: Option<bool>,
+    gemini_google_search: Option<bool>,
+    gemini_google_maps: Option<bool>,
     system_prompt: Option<String>,
 }
 
@@ -327,6 +333,12 @@ async fn api_update_config(
         }
         if let Some(inc) = req.include_screenshot {
             cfg.include_screenshot = inc;
+        }
+        if let Some(gs) = req.gemini_google_search {
+            cfg.gemini_google_search = gs;
+        }
+        if let Some(gm) = req.gemini_google_maps {
+            cfg.gemini_google_maps = gm;
         }
         if let Some(prompt) = req.system_prompt {
             cfg.system_prompt = prompt;

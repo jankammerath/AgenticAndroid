@@ -532,6 +532,8 @@
     document.getElementById("cfg-max-steps").value = state.config.max_agent_steps;
     document.getElementById("cfg-step-delay").value = state.config.step_delay_ms;
     document.getElementById("cfg-include-screenshot").checked = !!state.config.include_screenshot;
+    document.getElementById("cfg-gemini-search").checked = state.config.gemini_google_search !== false;
+    document.getElementById("cfg-gemini-maps").checked = state.config.gemini_google_maps !== false;
     document.getElementById("cfg-system-prompt").value = state.config.system_prompt || "";
     updateKeyWarning();
   }
@@ -943,6 +945,8 @@
       max_agent_steps: parseInt(document.getElementById("cfg-max-steps").value, 10) || 15,
       step_delay_ms: parseInt(document.getElementById("cfg-step-delay").value, 10) || 600,
       include_screenshot: document.getElementById("cfg-include-screenshot").checked,
+      gemini_google_search: document.getElementById("cfg-gemini-search").checked,
+      gemini_google_maps: document.getElementById("cfg-gemini-maps").checked,
     };
     await api("/api/config", {
       method: "PUT",
