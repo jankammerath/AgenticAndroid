@@ -1,9 +1,8 @@
 # Agentic Android
 
-<div style="padding: 8px 16px;background-color:#fdf3d7;color:#8c6d1f;border-radius:8px;line-height:28px;border:2px solid #fae29f;">
-   <strong style="color:#5c4813;">Stop trapping AI agents in a browser tab. Give it a real phone.</strong><br />
-   AI agents don't need a beige box—they need a smartphone just like you to tap, swipe, and actually get things done.
-</div><br />
+> [!WARNING]
+> **Stop trapping your AI agent in a browser tab. Give it a real phone.**  
+> AI agents don't need a beige box—they need a smartphone just like you to tap, swipe, and actually get things done.
 
 <p align="left">
   <a href="https://github.com/jankammerath/AgenticAndroid/releases/latest/download/AgenticAndroid.apk">
