@@ -62,6 +62,7 @@
     appMemoryForm: document.getElementById("app-memory-form"),
     memPackage: document.getElementById("mem-package"),
     memLabel: document.getElementById("mem-label"),
+    memPurpose: document.getElementById("mem-purpose"),
     memNotes: document.getElementById("mem-notes"),
     memSaveMsg: document.getElementById("mem-save-msg"),
     tabPanelTelegram: document.getElementById("tab-panel-telegram"),
@@ -1123,9 +1124,12 @@
       card.className = "memory-card";
       const title = pb.app_label ? `${pb.app_label}` : pb.package_name;
       const ver = pb.app_version ? ` · v${pb.app_version}` : "";
-      const notesHtml = (pb.notes || [])
-        .map((n) => `<li>${escapeHtml(n)}</li>`)
-        .join("");
+      const purposeHtml = pb.purpose
+        ? `<div class="memory-purpose">Use for: ${escapeHtml(pb.purpose)}</div>`
+        : "";
+      const notesHtml = (pb.notes || []).length
+        ? `<ul class="memory-notes">${pb.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`
+        : "";
       card.innerHTML = `
         <div class="memory-card-head">
           <div>
@@ -1137,13 +1141,15 @@
             <button type="button" class="pill-btn pill-btn-danger btn-del-mem">Delete</button>
           </div>
         </div>
-        <ul class="memory-notes">${notesHtml}</ul>
+        ${purposeHtml}
+        ${notesHtml}
       `;
       card.querySelector(".btn-edit-mem").addEventListener("click", () => {
         els.memPackage.value = pb.package_name;
         els.memLabel.value = pb.app_label || "";
+        els.memPurpose.value = pb.purpose || "";
         els.memNotes.value = (pb.notes || []).join("\n");
-        els.memNotes.focus();
+        els.memPurpose.focus();
       });
       card.querySelector(".btn-del-mem").addEventListener("click", async () => {
         await api(`/api/app-memory/${encodeURIComponent(pb.package_name)}`, {
@@ -1168,13 +1174,15 @@
       method: "PUT",
       body: JSON.stringify({
         app_label: els.memLabel.value.trim(),
+        purpose: els.memPurpose.value.trim(),
         notes,
       }),
     });
     els.memPackage.value = "";
     els.memLabel.value = "";
+    els.memPurpose.value = "";
     els.memNotes.value = "";
-    els.memSaveMsg.textContent = "Playbook saved!";
+    els.memSaveMsg.textContent = "App memory saved!";
     await loadAppMemory();
   });
 

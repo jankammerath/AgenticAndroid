@@ -194,16 +194,17 @@ pub fn device_tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "save_app_note",
-            "description": "Save a durable UI quirk, navigation tip, or workaround for a specific Android app package so future sessions avoid repeating mistakes. Prefer resource IDs and labels over raw pixel coordinates.",
+            "description": "Save what an Android app should be used for (`purpose`) and/or a durable UI quirk or workaround (`note`) for a specific Android app package so future sessions pick the right app and avoid repeating mistakes. Prefer resource IDs and labels over raw pixel coordinates.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "package_name": { "type": "string", "description": "Android package name (e.g. 'de.hafas.android.db')" },
-                    "note": { "type": "string", "description": "Concise, reusable tip or UI quirk to remember" },
+                    "purpose": { "type": "string", "description": "What tasks/topics this app should be used for (e.g. 'German train connections and tickets')" },
+                    "note": { "type": "string", "description": "Concise, reusable UI tip or quirk to remember" },
                     "app_label": { "type": "string", "description": "Optional human-readable app name" },
                     "app_version": { "type": "string", "description": "Optional app version string from the UI tree" }
                 },
-                "required": ["package_name", "note"]
+                "required": ["package_name"]
             }
         }),
         json!({

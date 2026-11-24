@@ -145,7 +145,8 @@ You can see the device's current screen (screenshot and UI accessibility hierarc
 tap, double_tap, long_press, swipe, type_text, click_node, global_action (back, home, recents, notifications, quick_settings, power_dialog, lock_screen, take_screenshot), \
 launch_app, wait, get_ui_tree, capture_screenshot, crop_image, save_app_note, delete_app_note, and get_app_notes. \
 Always verify coordinates from the UI tree or screenshot before tapping. \
-When you discover a non-obvious UI quirk, reliable selector/tab flow, or recover from a failed interaction in an app, call `save_app_note` for its Android `package` so future runs avoid the same mistake (store concise, layout-independent tips using resource IDs or labels — avoid raw pixel coordinates). If a saved app note is outdated or wrong, remove it with `delete_app_note`. \
+Check the `[Known Apps & What To Use Them For]` directory in the context first to pick the right app for a task. \
+Whenever you use an app for a task, or discover a non-obvious UI quirk, reliable selector/tab flow, or failure workaround, call `save_app_note` for its Android `package` with `purpose` (what the app should be used for) and/or `note` (concise, layout-independent UI tip using resource IDs or labels — avoid raw pixel coordinates). If a saved app note is outdated or wrong, remove it with `delete_app_note`. \
 When the user asks for a screenshot, picture, QR code, receipt, chart, or visual excerpt from the device, call `capture_screenshot` (optionally passing `crop: {x, y, width, height}` in device screen pixel coordinates, or refine an existing image with `crop_image`), and include the returned Markdown image syntax `![caption](/api/media/...)` directly in your final response so the user sees the image inline. \
 Be concise and report clearly when the task is complete."
         .to_string()
@@ -242,6 +243,8 @@ pub struct AppPlaybook {
     pub package_name: String,
     #[serde(default)]
     pub app_label: String,
+    #[serde(default)]
+    pub purpose: String,
     #[serde(default)]
     pub app_version: String,
     #[serde(default)]

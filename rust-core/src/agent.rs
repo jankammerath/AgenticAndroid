@@ -105,7 +105,11 @@ async fn execute_agent_loop(
         if msg.role == "user" {
             if is_last {
                 let ui_context = build_device_context(&state, &bridge, config.include_screenshot).await;
-                let enriched = format!("{}\n\n[Current Android Device State]\n{}", msg.content, ui_context.0);
+                let app_directory = build_app_directory(&state).await;
+                let enriched = format!(
+                    "{}{}\n\n[Current Android Device State]\n{}",
+                    msg.content, app_directory, ui_context.0
+                );
                 turn_messages.push(TurnMessage::User {
                     text: enriched,
                     screenshot_jpeg: ui_context.1,
@@ -246,6 +250,28 @@ async fn execute_agent_loop(
     Ok(())
 }
 
+async fn build_app_directory(state: &Arc<AppState>) -> String {
+    let map = state.app_playbooks.read().await;
+    let mut entries: Vec<&AppPlaybook> = map
+        .values()
+        .filter(|pb| !pb.purpose.trim().is_empty())
+        .collect();
+    if entries.is_empty() {
+        return String::new();
+    }
+    entries.sort_by(|a, b| b.updated_at_ms.cmp(&a.updated_at_ms));
+    let mut out = String::from("\n\n[Known Apps & What To Use Them For]\n");
+    for pb in entries.into_iter().take(40) {
+        let name = if !pb.app_label.trim().is_empty() {
+            format!("{} ({})", pb.app_label.trim(), pb.package_name)
+        } else {
+            pb.package_name.clone()
+        };
+        out.push_str(&format!("- {}: {}\n", name, pb.purpose.trim()));
+    }
+    out
+}
+
 async fn build_device_context(
     state: &Arc<AppState>,
     bridge: &DeviceBridge,
@@ -330,9 +356,14 @@ pub async fn execute_agent_tool(
 
 async fn handle_save_app_note(state: &Arc<AppState>, args: &Value) -> String {
     let pkg = args["package_name"].as_str().unwrap_or("").trim().to_string();
+    let purpose = args["purpose"].as_str().unwrap_or("").trim().to_string();
     let note = args["note"].as_str().unwrap_or("").trim().to_string();
-    if pkg.is_empty() || note.is_empty() {
-        return json!({ "ok": false, "error": "package_name and note are required" }).to_string();
+    if pkg.is_empty() || (purpose.is_empty() && note.is_empty()) {
+        return json!({
+            "ok": false,
+            "error": "package_name and at least one of purpose or note are required"
+        })
+        .to_string();
     }
     let label = args["app_label"].as_str().unwrap_or("").trim().to_string();
     let version = args["app_version"].as_str().unwrap_or("").trim().to_string();
@@ -342,6 +373,7 @@ async fn handle_save_app_note(state: &Arc<AppState>, args: &Value) -> String {
         let entry = map.entry(pkg.clone()).or_insert_with(|| AppPlaybook {
             package_name: pkg.clone(),
             app_label: label.clone(),
+            purpose: purpose.clone(),
             app_version: version.clone(),
             notes: Vec::new(),
             updated_at_ms: now_ms(),
@@ -349,15 +381,20 @@ async fn handle_save_app_note(state: &Arc<AppState>, args: &Value) -> String {
         if !label.is_empty() {
             entry.app_label = label;
         }
+        if !purpose.is_empty() {
+            entry.purpose = purpose;
+        }
         if !version.is_empty() {
             entry.app_version = version;
         }
-        let lower = note.to_lowercase();
-        if !entry.notes.iter().any(|existing| existing.to_lowercase() == lower) {
-            if entry.notes.len() >= 25 {
-                entry.notes.remove(0);
+        if !note.is_empty() {
+            let lower = note.to_lowercase();
+            if !entry.notes.iter().any(|existing| existing.to_lowercase() == lower) {
+                if entry.notes.len() >= 25 {
+                    entry.notes.remove(0);
+                }
+                entry.notes.push(note.clone());
             }
-            entry.notes.push(note.clone());
         }
         entry.updated_at_ms = now_ms();
         entry.notes.len()

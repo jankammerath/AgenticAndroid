@@ -899,7 +899,10 @@ struct UpsertAppMemoryRequest {
     #[serde(default)]
     app_label: String,
     #[serde(default)]
+    purpose: String,
+    #[serde(default)]
     app_version: String,
+    #[serde(default)]
     notes: Vec<String>,
 }
 
@@ -912,6 +915,7 @@ async fn api_upsert_app_memory(
     if pkg.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let clean_purpose = req.purpose.trim().to_string();
     let clean_notes: Vec<String> = req
         .notes
         .into_iter()
@@ -922,11 +926,12 @@ async fn api_upsert_app_memory(
 
     let saved = {
         let mut map = ctx.state.app_playbooks.write().await;
-        if clean_notes.is_empty() {
+        if clean_notes.is_empty() && clean_purpose.is_empty() {
             map.remove(&pkg);
             AppPlaybook {
                 package_name: pkg.clone(),
                 app_label: req.app_label.trim().to_string(),
+                purpose: String::new(),
                 app_version: req.app_version.trim().to_string(),
                 notes: Vec::new(),
                 updated_at_ms: now_ms(),
@@ -935,6 +940,7 @@ async fn api_upsert_app_memory(
             let entry = AppPlaybook {
                 package_name: pkg.clone(),
                 app_label: req.app_label.trim().to_string(),
+                purpose: clean_purpose,
                 app_version: req.app_version.trim().to_string(),
                 notes: clean_notes,
                 updated_at_ms: now_ms(),

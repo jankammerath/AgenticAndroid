@@ -248,16 +248,16 @@
         </div>
       </form>
 
-      <!-- Tab 4: App Memory (Per-App Playbooks) -->
+      <!-- Tab 4: App Memory (Per-App Playbooks & Purpose) -->
       <div class="modal-body tab-panel hidden" id="tab-panel-memory">
         <p class="modal-desc">
-          Per-app UI notes learned by the agent (or added by you). Automatically injected whenever the agent uses that app.
+          Remember which app to use for what, plus per-app UI quirks. App purposes are shared on every turn; detailed UI notes are injected automatically when using that app.
         </p>
 
         <div class="memory-list" id="app-memory-list"></div>
 
         <form class="security-card" id="app-memory-form">
-          <h3>Add / Edit App Playbook</h3>
+          <h3>Add / Edit App Memory</h3>
           <div class="settings-row settings-row-2">
             <div class="field">
               <label for="mem-package">Package Name</label>
@@ -269,12 +269,16 @@
             </div>
           </div>
           <div class="field">
-            <label for="mem-notes">Notes (one tip or UI quirk per line)</label>
+            <label for="mem-purpose">Use For / Purpose</label>
+            <input type="text" id="mem-purpose" placeholder="e.g. German train connections, schedules, and tickets" />
+          </div>
+          <div class="field">
+            <label for="mem-notes">UI Notes &amp; Quirks (one per line, optional)</label>
             <textarea id="mem-notes" rows="4" placeholder="Tap 'Suche' button before typing destination&#10;Dismiss cookie banner via 'Alle akzeptieren'"></textarea>
           </div>
           <div class="modal-footer">
             <span class="save-msg" id="mem-save-msg"></span>
-            <button type="submit" class="send-btn">Save Playbook</button>
+            <button type="submit" class="send-btn">Save App Memory</button>
           </div>
         </form>
       </div>
