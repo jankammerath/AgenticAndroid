@@ -261,7 +261,7 @@ async fn handle_incoming_message(
     if let Some(msg) = last_msg {
         let (clean_text, media_files) = extract_media_markdown(&msg.content);
         if !clean_text.is_empty() {
-            let _ = send_text(&state.http_client, &token, chat_id, &clean_text).await;
+            let _ = send_rich_message(&state.http_client, &token, chat_id, &clean_text).await;
         }
         for (caption, filename) in media_files {
             let path = state.config_dir.join("media").join(&filename);
@@ -346,6 +346,55 @@ async fn send_typing(client: &reqwest::Client, token: &str, chat_id: i64) -> Res
         .json(&json!({ "chat_id": chat_id, "action": "typing" }))
         .send()
         .await;
+    Ok(())
+}
+
+async fn send_rich_message(
+    client: &reqwest::Client,
+    token: &str,
+    chat_id: i64,
+    markdown: &str,
+) -> Result<(), String> {
+    let url = format!("https://api.telegram.org/bot{token}/sendRichMessage");
+    // Telegram sendRichMessage supports up to 32,768 UTF-8 characters per message
+    let chars: Vec<char> = markdown.chars().collect();
+    for chunk in chars.chunks(30_000) {
+        let part: String = chunk.iter().collect();
+        let resp = client
+            .post(&url)
+            .json(&json!({
+                "chat_id": chat_id,
+                "rich_message": {
+                    "markdown": part
+                }
+            }))
+            .send()
+            .await;
+
+        let ok = match resp {
+            Ok(r) if r.status().is_success() => {
+                let body = r.text().await.unwrap_or_default();
+                serde_json::from_str::<Value>(&body)
+                    .ok()
+                    .and_then(|v| v["ok"].as_bool())
+                    .unwrap_or(true)
+            }
+            Ok(r) => {
+                let status = r.status();
+                let body = r.text().await.unwrap_or_default();
+                log::warn!("sendRichMessage failed ({status}): {body}; falling back to sendMessage");
+                false
+            }
+            Err(e) => {
+                log::warn!("sendRichMessage network error: {e}; falling back to sendMessage");
+                false
+            }
+        };
+
+        if !ok {
+            send_text(client, token, chat_id, &part).await?;
+        }
+    }
     Ok(())
 }
 
