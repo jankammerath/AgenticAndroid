@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 jni = "0.21"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs"] }
 axum = { version = "0.7", features = ["ws", "json"] }
 tower-http = { version = "0.5", features = ["cors"] }
 serde = { version = "1", features = ["derive"] }
@@ -28,6 +28,7 @@ sha2 = "0.10"
 pbkdf2 = "0.12"
 rand = "0.8"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [profile.release]
 opt-level = 3

@@ -247,6 +247,18 @@
       return `\u0000CODE${idx}\u0000`;
     });
 
+    // Images ![alt](/api/media/... or https://...)
+    s = s.replace(
+      /!\[([^\]]*)\]\(((?:\/api\/media\/|https?:\/\/)[^\s)]+)\)/g,
+      (_, alt, url) => {
+        const idx = codeTokens.length;
+        codeTokens.push(
+          `<a class="md-image-link" href="${url}" target="_blank" rel="noopener noreferrer"><img class="md-image" src="${url}" alt="${alt}" loading="lazy" /></a>`
+        );
+        return `\u0000CODE${idx}\u0000`;
+      }
+    );
+
     // Links [text](https://...)
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => {
       return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;

@@ -59,6 +59,7 @@ pub async fn start_http_server(
         .route("/api/device/action", post(api_device_action))
         .route("/api/device/ui-tree", get(api_ui_tree))
         .route("/api/device/screenshot", get(api_screenshot))
+        .route("/api/media/:filename", get(api_get_media))
         .route("/api/auth/credentials", post(api_auth_set_credentials))
         .route("/api/auth/disable", post(api_auth_disable))
         .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
@@ -837,6 +838,40 @@ async fn api_device_action(
 
 async fn api_ui_tree(State(ctx): State<ServerCtx>) -> Json<Value> {
     Json(ctx.bridge.get_ui_tree().await)
+}
+
+async fn api_get_media(
+    State(ctx): State<ServerCtx>,
+    Path(filename): Path<String>,
+) -> Response {
+    let valid = !filename.is_empty()
+        && filename
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+        && !filename.contains("..");
+    if !valid {
+        return (StatusCode::BAD_REQUEST, "Invalid media filename").into_response();
+    }
+
+    let path = ctx.state.config_dir.join("media").join(&filename);
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => {
+            let content_type = if filename.ends_with(".png") {
+                "image/png"
+            } else {
+                "image/jpeg"
+            };
+            (
+                [
+                    (header::CONTENT_TYPE, content_type),
+                    (header::CACHE_CONTROL, "public, max-age=31536000"),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "Media file not found").into_response(),
+    }
 }
 
 async fn api_screenshot(State(ctx): State<ServerCtx>) -> Response {

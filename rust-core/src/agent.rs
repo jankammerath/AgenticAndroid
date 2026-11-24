@@ -181,7 +181,7 @@ async fn execute_agent_loop(
                 status: format!("Step {step}: Executing {}...", call.name),
             });
 
-            let result_str = execute_device_tool(&bridge, &call.name, &call.arguments).await;
+            let result_str = execute_agent_tool(&state, &bridge, &call.name, &call.arguments).await;
 
             let trace = ToolTrace {
                 tool_name: call.name.clone(),
@@ -277,6 +277,169 @@ async fn build_device_context(
     };
 
     (ui_str, screenshot)
+}
+
+pub async fn execute_agent_tool(
+    state: &Arc<AppState>,
+    bridge: &DeviceBridge,
+    name: &str,
+    args: &Value,
+) -> String {
+    match name {
+        "capture_screenshot" => handle_capture_screenshot(state, bridge, args).await,
+        "crop_image" => handle_crop_image(state, args).await,
+        _ => execute_device_tool(bridge, name, args).await,
+    }
+}
+
+async fn handle_capture_screenshot(
+    state: &Arc<AppState>,
+    bridge: &DeviceBridge,
+    args: &Value,
+) -> String {
+    // Request a fresh screenshot if fallback mode is active
+    let _ = bridge.request_screenshot().await;
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+
+    let frame = match state.latest_frame.read().await.clone() {
+        Some(f) => f,
+        None => {
+            return json!({
+                "ok": false,
+                "error": "No screenshot frame available from device."
+            })
+            .to_string();
+        }
+    };
+
+    let caption = args["caption"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("Screenshot")
+        .to_string();
+    let crop_opt = args.get("crop").and_then(|c| c.as_object()).cloned();
+    let media_dir = state.config_dir.join("media");
+
+    let res = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        std::fs::create_dir_all(&media_dir).map_err(|e| format!("Failed to create media dir: {e}"))?;
+        let img = image::load_from_memory(&frame.jpeg)
+            .map_err(|e| format!("Failed to decode screenshot JPEG: {e}"))?;
+        let img_w = img.width();
+        let img_h = img.height();
+
+        let final_img = if let Some(crop) = crop_opt {
+            let dev_w = frame.width.max(1) as f64;
+            let dev_h = frame.height.max(1) as f64;
+            let scale_x = img_w as f64 / dev_w;
+            let scale_y = img_h as f64 / dev_h;
+
+            let rx = crop.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0).max(0.0);
+            let ry = crop.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0).max(0.0);
+            let rw = crop.get("width").and_then(|v| v.as_f64()).unwrap_or(dev_w).max(1.0);
+            let rh = crop.get("height").and_then(|v| v.as_f64()).unwrap_or(dev_h).max(1.0);
+
+            let cx = ((rx * scale_x).round() as u32).min(img_w.saturating_sub(1));
+            let cy = ((ry * scale_y).round() as u32).min(img_h.saturating_sub(1));
+            let cw = ((rw * scale_x).round() as u32).max(1).min(img_w.saturating_sub(cx));
+            let ch = ((rh * scale_y).round() as u32).max(1).min(img_h.saturating_sub(cy));
+
+            img.crop_imm(cx, cy, cw, ch)
+        } else {
+            img
+        };
+
+        let out_w = final_img.width();
+        let out_h = final_img.height();
+        let filename = format!("{}.jpg", Uuid::new_v4());
+        let out_path = media_dir.join(&filename);
+        final_img
+            .to_rgb8()
+            .save_with_format(&out_path, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("Failed to save JPEG: {e}"))?;
+
+        let url = format!("/api/media/{filename}");
+        let safe_caption = caption.replace(['[', ']'], "");
+        Ok(json!({
+            "ok": true,
+            "url": url,
+            "markdown": format!("![{safe_caption}]({url})"),
+            "width": out_w,
+            "height": out_h
+        }))
+    })
+    .await;
+
+    match res {
+        Ok(Ok(val)) => val.to_string(),
+        Ok(Err(e)) => json!({ "ok": false, "error": e }).to_string(),
+        Err(e) => json!({ "ok": false, "error": format!("Image task failed: {e}") }).to_string(),
+    }
+}
+
+async fn handle_crop_image(state: &Arc<AppState>, args: &Value) -> String {
+    let source_url = args["source_url"].as_str().unwrap_or("").trim();
+    let filename = source_url.strip_prefix("/api/media/").unwrap_or(source_url);
+    if filename.is_empty()
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
+        return json!({
+            "ok": false,
+            "error": "Invalid source_url. Pass a /api/media/<filename>.jpg URL from capture_screenshot."
+        })
+        .to_string();
+    }
+
+    let x = args["x"].as_i64().unwrap_or(0).max(0) as u32;
+    let y = args["y"].as_i64().unwrap_or(0).max(0) as u32;
+    let w = args["width"].as_i64().unwrap_or(0).max(1) as u32;
+    let h = args["height"].as_i64().unwrap_or(0).max(1) as u32;
+    let caption = args["caption"]
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("Cropped image")
+        .to_string();
+
+    let media_dir = state.config_dir.join("media");
+    let src_path = media_dir.join(filename);
+
+    let res = tokio::task::spawn_blocking(move || -> Result<Value, String> {
+        let img = image::open(&src_path)
+            .map_err(|e| format!("Failed to open source image: {e}"))?;
+        let img_w = img.width();
+        let img_h = img.height();
+
+        let cx = x.min(img_w.saturating_sub(1));
+        let cy = y.min(img_h.saturating_sub(1));
+        let cw = w.max(1).min(img_w.saturating_sub(cx));
+        let ch = h.max(1).min(img_h.saturating_sub(cy));
+
+        let cropped = img.crop_imm(cx, cy, cw, ch);
+        let out_filename = format!("{}.jpg", Uuid::new_v4());
+        let out_path = media_dir.join(&out_filename);
+        cropped
+            .to_rgb8()
+            .save_with_format(&out_path, image::ImageFormat::Jpeg)
+            .map_err(|e| format!("Failed to save cropped JPEG: {e}"))?;
+
+        let url = format!("/api/media/{out_filename}");
+        let safe_caption = caption.replace(['[', ']'], "");
+        Ok(json!({
+            "ok": true,
+            "url": url,
+            "markdown": format!("![{safe_caption}]({url})"),
+            "width": cropped.width(),
+            "height": cropped.height()
+        }))
+    })
+    .await;
+
+    match res {
+        Ok(Ok(val)) => val.to_string(),
+        Ok(Err(e)) => json!({ "ok": false, "error": e }).to_string(),
+        Err(e) => json!({ "ok": false, "error": format!("Crop task failed: {e}") }).to_string(),
+    }
 }
 
 pub async fn execute_device_tool(bridge: &DeviceBridge, name: &str, args: &Value) -> String {

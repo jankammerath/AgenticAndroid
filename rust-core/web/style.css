@@ -479,6 +479,21 @@ html, body {
   text-decoration: underline;
 }
 
+.md-image-link {
+  display: inline-block;
+  margin: 8px 0;
+}
+
+.md-image {
+  display: block;
+  max-width: 100%;
+  max-height: 460px;
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
 .md-content code {
   background: var(--surface-2);
   padding: 2px 6px;

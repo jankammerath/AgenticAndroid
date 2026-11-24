@@ -155,6 +155,43 @@ pub fn device_tool_definitions() -> Vec<Value> {
                 "required": ["ms"]
             }
         }),
+        json!({
+            "name": "capture_screenshot",
+            "description": "Capture the current Android screen as an image to share with the user, optionally cropping to a region in device screen pixel coordinates. Returns a URL and Markdown image tag to include in your reply.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caption": { "type": "string", "description": "Short alt text / caption for the image" },
+                    "crop": {
+                        "type": "object",
+                        "description": "Optional crop rectangle in device screen pixel coordinates (same coordinate space as UI tree bounds)",
+                        "properties": {
+                            "x": { "type": "integer", "description": "Left X pixel coordinate" },
+                            "y": { "type": "integer", "description": "Top Y pixel coordinate" },
+                            "width": { "type": "integer", "description": "Crop width in pixels" },
+                            "height": { "type": "integer", "description": "Crop height in pixels" }
+                        },
+                        "required": ["x", "y", "width", "height"]
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "crop_image",
+            "description": "Crop a previously captured image (from capture_screenshot or crop_image) to a tighter region and return a new Markdown image tag to show the user.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_url": { "type": "string", "description": "The /api/media/<file>.jpg URL returned by capture_screenshot or crop_image" },
+                    "x": { "type": "integer", "description": "Left X coordinate in pixels of the source image" },
+                    "y": { "type": "integer", "description": "Top Y coordinate in pixels of the source image" },
+                    "width": { "type": "integer", "description": "Crop width in pixels" },
+                    "height": { "type": "integer", "description": "Crop height in pixels" },
+                    "caption": { "type": "string", "description": "Short alt text / caption for the cropped image" }
+                },
+                "required": ["source_url", "x", "y", "width", "height"]
+            }
+        }),
     ]
 }
 
