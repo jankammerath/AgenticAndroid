@@ -2,19 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Agentic" />
   <title>Agentic Android</title>
+  <link rel="manifest" href="/manifest.json" />
   <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
+      <button type="button" class="mobile-icon-btn mobile-only" id="btn-mobile-menu" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="brand">
         <img src="/logo.png" alt="Agentic Android" class="brand-logo" />
         <h1>Agentic Android</h1>
       </div>
-      <div class="topbar-status">
+      <div class="topbar-status desktop-only">
         <span class="status-pill" id="badge-accessibility" title="Accessibility Service Status">
           <span class="dot"></span><span class="label">Accessibility</span>
         </span>
@@ -25,11 +34,35 @@
         <button class="pill-btn pill-btn-accent" id="btn-open-settings">Settings</button>
         <button class="pill-btn hidden" id="btn-logout">Logout</button>
       </div>
+      <button type="button" class="mobile-icon-btn mobile-only" id="btn-mobile-actions" aria-label="Device controls">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="4"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15.5" cy="11" r="1"/><circle cx="18" cy="13" r="1"/></svg>
+      </button>
     </header>
 
+    <div class="mobile-backdrop hidden" id="mobile-backdrop"></div>
+
     <main class="workspace">
-      <!-- Sessions Sidebar -->
-      <aside class="sidebar">
+      <!-- Sessions Sidebar (Drawer on mobile) -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-mobile-panel mobile-only">
+          <div class="sidebar-mobile-head">
+            <div class="brand">
+              <img src="/logo.png" alt="Agentic Android" class="brand-logo" />
+              <span class="sidebar-mobile-title">Menu</span>
+            </div>
+            <button type="button" class="ghost-icon-btn" id="btn-close-mobile-menu">&times;</button>
+          </div>
+          <div class="sidebar-mobile-status">
+            <span class="status-pill" id="mobile-badge-accessibility"><span class="dot"></span><span class="label">Accessibility</span></span>
+            <span class="status-pill" id="mobile-badge-video"><span class="dot"></span><span class="label">Screen</span></span>
+          </div>
+          <div class="sidebar-mobile-actions">
+            <button type="button" class="pill-btn" id="mobile-btn-audio">Audio Off</button>
+            <button type="button" class="pill-btn pill-btn-accent" id="mobile-btn-settings">Settings</button>
+            <button type="button" class="pill-btn hidden" id="mobile-btn-logout">Logout</button>
+          </div>
+        </div>
+
         <div class="sidebar-header">
           <span class="section-label">Sessions</span>
           <button class="icon-pill-btn" id="btn-new-session" title="New Session">+ New</button>
@@ -37,8 +70,17 @@
         <div class="session-list" id="session-list"></div>
       </aside>
 
-      <!-- Chatbot Interface -->
-      <section class="chat-pane">
+      <!-- Chatbot Interface (Collapsible bottom sheet on mobile) -->
+      <section class="chat-pane" id="chat-pane">
+        <button type="button" class="mobile-chat-handle mobile-only" id="mobile-chat-handle" aria-expanded="false">
+          <span class="chat-handle-bar"></span>
+          <span class="chat-handle-row">
+            <span class="chat-handle-dot hidden" id="mobile-chat-dot"></span>
+            <span id="mobile-chat-label">Chat</span>
+            <svg class="chat-handle-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+          </span>
+        </button>
+
         <div class="key-warning hidden" id="key-warning">
           API key not set for selected provider. <button class="link-btn" id="btn-warn-settings">Configure in Settings</button>
         </div>
@@ -96,7 +138,15 @@
           </div>
         </div>
 
-        <div class="device-controls">
+        <div class="device-controls" id="device-controls">
+          <div class="device-controls-mobile-head mobile-only">
+            <span class="section-label">Device Controls</span>
+            <div class="device-header-right">
+              <button type="button" class="ghost-icon-btn" id="mobile-btn-refresh-frame" title="Refresh frame">&#8635;</button>
+              <button type="button" class="ghost-icon-btn" id="mobile-btn-inspect-ui" title="Inspect UI Tree">{ }</button>
+              <button type="button" class="ghost-icon-btn" id="btn-close-mobile-actions">&times;</button>
+            </div>
+          </div>
           <div class="nav-pill-row">
             <button class="nav-pill" data-global="back" title="Back">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
@@ -224,6 +274,13 @@
           <label>
             <input type="checkbox" id="cfg-gemini-maps" checked />
             Enable Google Maps grounding (Gemini models)
+          </label>
+        </div>
+
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" id="cfg-notify-complete" checked />
+            Send notification when agent execution completes
           </label>
         </div>
 

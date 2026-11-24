@@ -21,8 +21,13 @@ use tower_http::cors::{Any, CorsLayer};
 const INDEX_HTML: &str = include_str!("../web/index.html");
 const STYLE_CSS: &str = include_str!("../web/style.css");
 const APP_JS: &str = include_str!("../web/app.js");
+const MANIFEST_JSON: &str = include_str!("../web/manifest.json");
+const SW_JS: &str = include_str!("../web/sw.js");
 const LOGO_PNG: &[u8] = include_bytes!("../web/logo.png");
 const FAVICON_PNG: &[u8] = include_bytes!("../web/favicon.png");
+const ICON_192_PNG: &[u8] = include_bytes!("../web/icon-192.png");
+const ICON_512_PNG: &[u8] = include_bytes!("../web/icon-512.png");
+const APPLE_TOUCH_ICON_PNG: &[u8] = include_bytes!("../web/apple-touch-icon.png");
 
 #[derive(Clone)]
 pub struct ServerCtx {
@@ -81,8 +86,13 @@ pub async fn start_http_server(
         .route("/", get(serve_index))
         .route("/style.css", get(serve_css))
         .route("/app.js", get(serve_js))
+        .route("/manifest.json", get(serve_manifest))
+        .route("/sw.js", get(serve_sw))
         .route("/logo.png", get(serve_logo))
         .route("/favicon.png", get(serve_favicon))
+        .route("/icon-192.png", get(serve_icon_192))
+        .route("/icon-512.png", get(serve_icon_512))
+        .route("/apple-touch-icon.png", get(serve_apple_touch_icon))
         .route("/api/health", get(api_health))
         .route("/api/auth/status", get(api_auth_status))
         .route("/api/auth/login", post(api_auth_login))
@@ -148,6 +158,37 @@ async fn serve_logo() -> Response {
 
 async fn serve_favicon() -> Response {
     ([(header::CONTENT_TYPE, "image/png")], FAVICON_PNG).into_response()
+}
+
+async fn serve_manifest() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/manifest+json; charset=utf-8")],
+        MANIFEST_JSON,
+    )
+        .into_response()
+}
+
+async fn serve_sw() -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/javascript; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-cache"),
+        ],
+        SW_JS,
+    )
+        .into_response()
+}
+
+async fn serve_icon_192() -> Response {
+    ([(header::CONTENT_TYPE, "image/png")], ICON_192_PNG).into_response()
+}
+
+async fn serve_icon_512() -> Response {
+    ([(header::CONTENT_TYPE, "image/png")], ICON_512_PNG).into_response()
+}
+
+async fn serve_apple_touch_icon() -> Response {
+    ([(header::CONTENT_TYPE, "image/png")], APPLE_TOUCH_ICON_PNG).into_response()
 }
 
 const SESSION_COOKIE_NAME: &str = "agentic_session";
@@ -560,6 +601,7 @@ struct SafeConfigResponse {
     include_screenshot: bool,
     gemini_google_search: bool,
     gemini_google_maps: bool,
+    notify_on_complete: bool,
     system_prompt: String,
     telegram: Value,
 }
@@ -601,6 +643,7 @@ async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse
         include_screenshot: cfg.include_screenshot,
         gemini_google_search: cfg.gemini_google_search,
         gemini_google_maps: cfg.gemini_google_maps,
+        notify_on_complete: cfg.notify_on_complete,
         system_prompt: cfg.system_prompt,
         telegram: json!({
             "enabled": cfg.telegram.enabled,
@@ -629,6 +672,7 @@ struct UpdateConfigRequest {
     include_screenshot: Option<bool>,
     gemini_google_search: Option<bool>,
     gemini_google_maps: Option<bool>,
+    notify_on_complete: Option<bool>,
     system_prompt: Option<String>,
     telegram: Option<TelegramConfigPatch>,
 }
@@ -683,6 +727,9 @@ async fn api_update_config(
         }
         if let Some(gm) = req.gemini_google_maps {
             cfg.gemini_google_maps = gm;
+        }
+        if let Some(notify) = req.notify_on_complete {
+            cfg.notify_on_complete = notify;
         }
         if let Some(prompt) = req.system_prompt {
             cfg.system_prompt = prompt;

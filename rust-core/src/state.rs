@@ -113,6 +113,8 @@ pub struct AppConfig {
     pub gemini_google_search: bool,
     #[serde(default = "default_true")]
     pub gemini_google_maps: bool,
+    #[serde(default = "default_true")]
+    pub notify_on_complete: bool,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
     #[serde(default)]
@@ -163,6 +165,7 @@ impl Default for AppConfig {
             include_screenshot: default_include_screenshot(),
             gemini_google_search: true,
             gemini_google_maps: true,
+            notify_on_complete: true,
             system_prompt: default_system_prompt(),
             auth: AuthConfig::default(),
             telegram: TelegramConfig::default(),

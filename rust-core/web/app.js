@@ -25,6 +25,24 @@
     btnAudioToggle: document.getElementById("btn-audio-toggle"),
     btnOpenSettings: document.getElementById("btn-open-settings"),
     btnLogout: document.getElementById("btn-logout"),
+    btnMobileMenu: document.getElementById("btn-mobile-menu"),
+    btnCloseMobileMenu: document.getElementById("btn-close-mobile-menu"),
+    btnMobileActions: document.getElementById("btn-mobile-actions"),
+    btnCloseMobileActions: document.getElementById("btn-close-mobile-actions"),
+    mobileBackdrop: document.getElementById("mobile-backdrop"),
+    sidebar: document.getElementById("sidebar"),
+    chatPane: document.getElementById("chat-pane"),
+    deviceControls: document.getElementById("device-controls"),
+    mobileChatHandle: document.getElementById("mobile-chat-handle"),
+    mobileChatLabel: document.getElementById("mobile-chat-label"),
+    mobileChatDot: document.getElementById("mobile-chat-dot"),
+    mobileBadgeAccessibility: document.getElementById("mobile-badge-accessibility"),
+    mobileBadgeVideo: document.getElementById("mobile-badge-video"),
+    mobileBtnAudio: document.getElementById("mobile-btn-audio"),
+    mobileBtnSettings: document.getElementById("mobile-btn-settings"),
+    mobileBtnLogout: document.getElementById("mobile-btn-logout"),
+    mobileBtnRefreshFrame: document.getElementById("mobile-btn-refresh-frame"),
+    mobileBtnInspectUi: document.getElementById("mobile-btn-inspect-ui"),
     btnCloseSettings: document.getElementById("btn-close-settings"),
     btnWarnSettings: document.getElementById("btn-warn-settings"),
     btnNewSession: document.getElementById("btn-new-session"),
@@ -109,6 +127,67 @@
 
   let appBooted = false;
   let statusInterval = null;
+  let swRegistration = null;
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((reg) => { swRegistration = reg; })
+      .catch(() => {});
+  }
+
+  function closeMobileOverlays() {
+    els.sidebar.classList.remove("mobile-open");
+    els.deviceControls.classList.remove("mobile-open");
+    els.chatPane.classList.remove("mobile-expanded");
+    els.mobileChatHandle.setAttribute("aria-expanded", "false");
+    els.mobileBackdrop.classList.add("hidden");
+  }
+
+  function syncMobileBackdrop() {
+    const anyOpen =
+      els.sidebar.classList.contains("mobile-open") ||
+      els.deviceControls.classList.contains("mobile-open") ||
+      els.chatPane.classList.contains("mobile-expanded");
+    els.mobileBackdrop.classList.toggle("hidden", !anyOpen);
+  }
+
+  async function ensureNotificationPermission() {
+    if (!("Notification" in window)) return;
+    if (state.config?.notify_on_complete === false) return;
+    if (Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch {}
+    }
+  }
+
+  async function notifyAgentCompleted(message) {
+    if (!("Notification" in window)) return;
+    if (state.config?.notify_on_complete === false) return;
+    if (Notification.permission !== "granted") return;
+
+    const raw = String(message?.content || "Task finished.")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "[Image]")
+      .replace(/[*_`#>-]/g, "")
+      .trim();
+    const body = raw.length > 160 ? `${raw.slice(0, 157)}...` : raw;
+    const opts = {
+      body,
+      icon: "/icon-192.png",
+      badge: "/favicon.png",
+      tag: "agentic-android-complete",
+      renotify: true,
+    };
+
+    try {
+      if (swRegistration && typeof swRegistration.showNotification === "function") {
+        await swRegistration.showNotification("Agentic Android", opts);
+      } else {
+        new Notification("Agentic Android", opts);
+      }
+    } catch {}
+  }
 
   async function api(path, opts = {}) {
     const res = await fetch(path, {
@@ -245,6 +324,9 @@
       item.querySelector(".session-meta").addEventListener("click", () => {
         state.activeSessionId = s.id;
         renderAll();
+        if (window.innerWidth <= 900) {
+          closeMobileOverlays();
+        }
       });
       item.querySelector(".session-del").addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -653,6 +735,7 @@
     document.getElementById("cfg-include-screenshot").checked = !!state.config.include_screenshot;
     document.getElementById("cfg-gemini-search").checked = state.config.gemini_google_search !== false;
     document.getElementById("cfg-gemini-maps").checked = state.config.gemini_google_maps !== false;
+    document.getElementById("cfg-notify-complete").checked = state.config.notify_on_complete !== false;
     document.getElementById("cfg-system-prompt").value = state.config.system_prompt || "";
     const tg = state.config.telegram || {};
     els.tgEnabled.checked = !!tg.enabled;
@@ -678,8 +761,12 @@
     try {
       const st = await api("/api/status");
       const accEnabled = !!st.device?.accessibility_enabled;
-      els.badgeAccessibility.className = `status-pill ${accEnabled ? "ok" : "warn"}`;
-      els.badgeAccessibility.querySelector(".label").textContent = accEnabled ? "Accessibility" : "Accessibility Off";
+      const accClass = `status-pill ${accEnabled ? "ok" : "warn"}`;
+      const accText = accEnabled ? "Accessibility" : "Accessibility Off";
+      els.badgeAccessibility.className = accClass;
+      els.badgeAccessibility.querySelector(".label").textContent = accText;
+      els.mobileBadgeAccessibility.className = accClass;
+      els.mobileBadgeAccessibility.querySelector(".label").textContent = accText;
       if (st.device?.device_name) {
         document.title = `${st.device.device_name} (Agentic Android)`;
       }
@@ -691,6 +778,8 @@
     } catch {
       els.badgeAccessibility.className = "status-pill warn";
       els.badgeAccessibility.querySelector(".label").textContent = "Disconnected";
+      els.mobileBadgeAccessibility.className = "status-pill warn";
+      els.mobileBadgeAccessibility.querySelector(".label").textContent = "Disconnected";
     }
   }
 
@@ -703,6 +792,8 @@
     ws.onopen = () => {
       els.badgeVideo.className = "status-pill ok";
       els.badgeVideo.querySelector(".label").textContent = "Screen";
+      els.mobileBadgeVideo.className = "status-pill ok";
+      els.mobileBadgeVideo.querySelector(".label").textContent = "Screen";
     };
 
     ws.onmessage = (ev) => {
@@ -728,6 +819,8 @@
     ws.onclose = () => {
       els.badgeVideo.className = "status-pill warn";
       els.badgeVideo.querySelector(".label").textContent = "Reconnecting";
+      els.mobileBadgeVideo.className = "status-pill warn";
+      els.mobileBadgeVideo.querySelector(".label").textContent = "Reconnecting";
       setTimeout(connectVideoWs, 2000);
     };
   }
@@ -740,11 +833,13 @@
         state.audioWs = null;
       }
       els.btnAudioToggle.textContent = "Audio Off";
+      els.mobileBtnAudio.textContent = "Audio Off";
       return;
     }
 
     state.audioEnabled = true;
     els.btnAudioToggle.textContent = "Audio On";
+    els.mobileBtnAudio.textContent = "Audio On";
     if (!state.audioCtx) {
       state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -808,16 +903,19 @@
     ws.onmessage = async (ev) => {
       try {
         const evt = JSON.parse(ev.data);
-        if (evt.type === "agent_status" && evt.session_id === state.activeSessionId) {
-          els.agentActivity.classList.toggle("hidden", !evt.running);
-          els.agentActivityText.textContent = evt.status || "Working...";
+        if (evt.type === "agent_status") {
+          els.mobileChatDot.classList.toggle("hidden", !evt.running);
+          els.mobileChatLabel.textContent = evt.running ? "Working..." : "Chat";
+          if (evt.session_id === state.activeSessionId) {
+            els.agentActivity.classList.toggle("hidden", !evt.running);
+            els.agentActivityText.textContent = evt.status || "Working...";
+          }
         } else if (evt.type === "tool_call" && evt.session_id === state.activeSessionId) {
           els.agentActivityText.textContent = `Executed ${evt.tool_name}`;
-        } else if (
-          evt.type === "session_updated" ||
-          evt.type === "assistant_message" ||
-          evt.type === "error"
-        ) {
+        } else if (evt.type === "assistant_message") {
+          await loadSessions();
+          notifyAgentCompleted(evt.message);
+        } else if (evt.type === "session_updated" || evt.type === "error") {
           await loadSessions();
         }
       } catch {}
@@ -850,7 +948,58 @@
 
   els.screenImg.addEventListener("pointerdown", (e) => {
     e.preventDefault();
+    try { els.screenImg.setPointerCapture(e.pointerId); } catch {}
     pointerStart = toDeviceCoords(e.clientX, e.clientY);
+  });
+
+  // Mobile navigation & collapsible chat controls
+  els.btnMobileMenu.addEventListener("click", () => {
+    const opening = !els.sidebar.classList.contains("mobile-open");
+    closeMobileOverlays();
+    if (opening) {
+      els.sidebar.classList.add("mobile-open");
+      syncMobileBackdrop();
+    }
+  });
+
+  els.btnCloseMobileMenu.addEventListener("click", closeMobileOverlays);
+
+  els.btnMobileActions.addEventListener("click", () => {
+    const opening = !els.deviceControls.classList.contains("mobile-open");
+    closeMobileOverlays();
+    if (opening) {
+      els.deviceControls.classList.add("mobile-open");
+      syncMobileBackdrop();
+    }
+  });
+
+  els.btnCloseMobileActions.addEventListener("click", closeMobileOverlays);
+
+  els.mobileChatHandle.addEventListener("click", () => {
+    const expanding = !els.chatPane.classList.contains("mobile-expanded");
+    closeMobileOverlays();
+    if (expanding) {
+      els.chatPane.classList.add("mobile-expanded");
+      els.mobileChatHandle.setAttribute("aria-expanded", "true");
+      syncMobileBackdrop();
+      els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    }
+  });
+
+  els.mobileBackdrop.addEventListener("click", closeMobileOverlays);
+  els.mobileBtnAudio.addEventListener("click", toggleAudio);
+  els.mobileBtnSettings.addEventListener("click", () => {
+    closeMobileOverlays();
+    openSettings();
+  });
+  els.mobileBtnLogout.addEventListener("click", () => {
+    closeMobileOverlays();
+    els.btnLogout.click();
+  });
+  els.mobileBtnRefreshFrame.addEventListener("click", () => els.btnRefreshFrame.click());
+  els.mobileBtnInspectUi.addEventListener("click", () => {
+    closeMobileOverlays();
+    els.btnInspectUi.click();
   });
 
   els.screenImg.addEventListener("pointerup", async (e) => {
@@ -932,6 +1081,7 @@
     const session = getActiveSession();
     const content = els.chatInput.value.trim();
     if (!session || !content) return;
+    ensureNotificationPermission();
     els.chatInput.value = "";
     els.agentActivity.classList.remove("hidden");
     els.agentActivityText.textContent = "Starting agent...";
@@ -1088,7 +1238,11 @@
       include_screenshot: document.getElementById("cfg-include-screenshot").checked,
       gemini_google_search: document.getElementById("cfg-gemini-search").checked,
       gemini_google_maps: document.getElementById("cfg-gemini-maps").checked,
+      notify_on_complete: document.getElementById("cfg-notify-complete").checked,
     };
+    if (payload.notify_on_complete) {
+      ensureNotificationPermission();
+    }
     await api("/api/config", {
       method: "PUT",
       body: JSON.stringify(payload),
@@ -1231,6 +1385,7 @@
   async function refreshAuthStatus() {
     const st = await api("/api/auth/status");
     els.btnLogout.classList.toggle("hidden", !st.auth_enabled);
+    els.mobileBtnLogout.classList.toggle("hidden", !st.auth_enabled);
     els.secAuthBadge.className = `status-pill ${st.auth_enabled ? "ok" : ""}`;
     els.secAuthBadge.querySelector(".label").textContent = st.auth_enabled
       ? `Enabled (${st.username || "active"})`
