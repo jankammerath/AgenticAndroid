@@ -300,6 +300,7 @@ pub enum AgentEvent {
 
 pub struct AppState {
     pub config_dir: PathBuf,
+    pub backup_dir: Option<PathBuf>,
     pub port: u16,
     pub config: RwLock<AppConfig>,
     pub sessions: RwLock<Vec<Session>>,
@@ -317,8 +318,43 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config_dir: PathBuf, port: u16) -> Arc<Self> {
+    pub fn new(config_dir: PathBuf, backup_dir: Option<PathBuf>, port: u16) -> Arc<Self> {
         let _ = std::fs::create_dir_all(&config_dir);
+        if let Some(ref bdir) = backup_dir {
+            let _ = std::fs::create_dir_all(bdir);
+            // If internal config is missing (fresh install after uninstall or new AVD),
+            // automatically restore persisted JSON state from external backup dir.
+            if !config_dir.join("config.json").exists() && bdir.join("config.json").exists() {
+                for fname in [
+                    "config.json",
+                    "sessions.json",
+                    "auth_tokens.json",
+                    "app_playbooks.json",
+                ] {
+                    let src = bdir.join(fname);
+                    let dst = config_dir.join(fname);
+                    if src.exists() && !dst.exists() {
+                        let _ = std::fs::copy(&src, &dst);
+                    }
+                }
+                log::info!("Restored Agentic Android state from {}", bdir.display());
+            } else {
+                // Mirror existing internal files to backup_dir on startup
+                for fname in [
+                    "config.json",
+                    "sessions.json",
+                    "auth_tokens.json",
+                    "app_playbooks.json",
+                ] {
+                    let src = config_dir.join(fname);
+                    let dst = bdir.join(fname);
+                    if src.exists() {
+                        let _ = std::fs::copy(&src, &dst);
+                    }
+                }
+            }
+        }
+
         let config = load_json::<AppConfig>(&config_dir.join("config.json")).unwrap_or_default();
         let mut sessions =
             load_json::<Vec<Session>>(&config_dir.join("sessions.json")).unwrap_or_default();
@@ -359,6 +395,7 @@ impl AppState {
 
         Arc::new(Self {
             config_dir,
+            backup_dir,
             port,
             config: RwLock::new(config),
             sessions: RwLock::new(sessions),
@@ -376,22 +413,32 @@ impl AppState {
         })
     }
 
+    fn mirror_to_backup(&self, filename: &str) {
+        if let Some(ref bdir) = self.backup_dir {
+            let _ = std::fs::create_dir_all(bdir);
+            let _ = std::fs::copy(self.config_dir.join(filename), bdir.join(filename));
+        }
+    }
+
     pub async fn save_app_playbooks(&self) {
         let map = self.app_playbooks.read().await.clone();
         let path = self.config_dir.join("app_playbooks.json");
         let _ = save_json(&path, &map);
+        self.mirror_to_backup("app_playbooks.json");
     }
 
     pub async fn save_config(&self) {
         let cfg = self.config.read().await.clone();
         let path = self.config_dir.join("config.json");
         let _ = save_json(&path, &cfg);
+        self.mirror_to_backup("config.json");
     }
 
     pub async fn save_sessions(&self) {
         let sessions = self.sessions.read().await.clone();
         let path = self.config_dir.join("sessions.json");
         let _ = save_json(&path, &sessions);
+        self.mirror_to_backup("sessions.json");
     }
 
     pub async fn save_auth_tokens(&self) {
@@ -403,6 +450,7 @@ impl AppState {
         };
         let path = self.config_dir.join("auth_tokens.json");
         let _ = save_json(&path, &tokens);
+        self.mirror_to_backup("auth_tokens.json");
     }
 
     pub async fn push_video_frame(&self, jpeg: Vec<u8>, width: u32, height: u32) {

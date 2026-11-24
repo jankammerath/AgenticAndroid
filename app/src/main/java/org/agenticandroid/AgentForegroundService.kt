@@ -72,6 +72,13 @@ class AgentForegroundService : Service() {
         createNotificationChannel()
     }
 
+    private fun getBackupDirPath(): String {
+        val ext = getExternalFilesDir(null) ?: return ""
+        val dir = java.io.File(ext, "state_backup")
+        dir.mkdirs()
+        return dir.absolutePath
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP_SERVER -> {
@@ -91,7 +98,7 @@ class AgentForegroundService : Service() {
                     try {
                         startAsForeground(port, withMediaProjection = true)
                         if (!NativeBridge.nativeIsServerRunning()) {
-                            NativeBridge.nativeStartServer(port, filesDir.absolutePath, NativeBridge)
+                            NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), NativeBridge)
                             startFallbackPoller()
                         }
                         startMediaCast(code, data)
@@ -107,7 +114,7 @@ class AgentForegroundService : Service() {
             else -> {
                 val port = intent?.getIntExtra(EXTRA_PORT, 8080) ?: 8080
                 startAsForeground(port, withMediaProjection = isMediaCastActive)
-                NativeBridge.nativeStartServer(port, filesDir.absolutePath, NativeBridge)
+                NativeBridge.nativeStartServer(port, filesDir.absolutePath, getBackupDirPath(), NativeBridge)
                 startFallbackPoller()
                 return START_STICKY
             }

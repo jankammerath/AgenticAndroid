@@ -51,6 +51,7 @@ pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeStartServer(
     _class: JClass,
     port: jint,
     config_dir: JString,
+    backup_dir: JString,
     callback: JObject,
 ) -> jboolean {
     let rt = runtime();
@@ -62,6 +63,13 @@ pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeStartServer(
             return JNI_FALSE;
         }
     };
+
+    let backup_opt: Option<PathBuf> = env
+        .get_string(&backup_dir)
+        .ok()
+        .map(|s| String::from(s))
+        .filter(|s| !s.trim().is_empty())
+        .map(PathBuf::from);
 
     let vm = match env.get_java_vm() {
         Ok(vm) => vm,
@@ -81,7 +89,7 @@ pub extern "system" fn Java_org_agenticandroid_NativeBridge_nativeStartServer(
 
     let port_u16 = (port as u16).max(1024);
     let bridge = DeviceBridge::new(vm, global_cb);
-    let state = AppState::new(PathBuf::from(dir_str), port_u16);
+    let state = AppState::new(PathBuf::from(dir_str), backup_opt, port_u16);
 
     let mut slot = server_slot().lock().unwrap();
     if let Some(mut existing) = slot.take() {

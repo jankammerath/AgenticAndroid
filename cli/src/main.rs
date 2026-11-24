@@ -886,8 +886,78 @@ fn wait_for_emulator_boot(
     Err("Timed out waiting for Android emulator to finish booting.".into())
 }
 
+const DEVICE_BACKUP_DIR: &str = "/sdcard/Android/data/org.agenticandroid/files/state_backup";
+const STATE_FILES: &[&str] = &[
+    "config.json",
+    "sessions.json",
+    "auth_tokens.json",
+    "app_playbooks.json",
+];
+
+fn pull_app_state_backup(cfg: &EffectiveConfig) {
+    let host_dir = cfg.state_dir.join("state_backup");
+    if fs::create_dir_all(&host_dir).is_err() {
+        return;
+    }
+    let adb = adb_bin(&cfg.android_home);
+    let mut pulled = 0usize;
+    for fname in STATE_FILES {
+        let remote = format!("{DEVICE_BACKUP_DIR}/{fname}");
+        let local = host_dir.join(fname);
+        if let Ok(out) = Command::new(&adb)
+            .args(["pull", &remote])
+            .arg(&local)
+            .output()
+        {
+            if out.status.success() {
+                pulled += 1;
+            }
+        }
+    }
+    if pulled > 0 {
+        println!(
+            "    Backed up {pulled} state file(s) to {}",
+            host_dir.display()
+        );
+    }
+}
+
+fn push_app_state_backup(cfg: &EffectiveConfig) {
+    let host_dir = cfg.state_dir.join("state_backup");
+    if !host_dir.join("config.json").exists() {
+        return;
+    }
+    let adb = adb_bin(&cfg.android_home);
+    let _ = Command::new(&adb)
+        .args(["shell", "mkdir", "-p", DEVICE_BACKUP_DIR])
+        .status();
+    let mut pushed = 0usize;
+    for fname in STATE_FILES {
+        let local = host_dir.join(fname);
+        if local.exists() {
+            let remote = format!("{DEVICE_BACKUP_DIR}/{fname}");
+            if let Ok(out) = Command::new(&adb)
+                .arg("push")
+                .arg(&local)
+                .arg(&remote)
+                .output()
+            {
+                if out.status.success() {
+                    pushed += 1;
+                }
+            }
+        }
+    }
+    if pushed > 0 {
+        println!("    Restored {pushed} state file(s) from host backup.");
+    }
+}
+
 fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), String> {
     let adb = adb_bin(&cfg.android_home);
+
+    // Always pull latest state backup from the device BEFORE installing or uninstalling
+    pull_app_state_backup(cfg);
 
     println!(
         "==> [4/5] Installing APK ({}) & configuring Accessibility Service...",
@@ -899,6 +969,7 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         .output()
         .map_err(|e| format!("Failed to run adb install: {e}"))?;
 
+    let mut reinstalled = false;
     if !install_out.status.success() {
         let stderr = String::from_utf8_lossy(&install_out.stderr);
         let stdout = String::from_utf8_lossy(&install_out.stdout);
@@ -916,10 +987,17 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
             if !retry.success() {
                 return Err("adb install failed after uninstalling incompatible package.".into());
             }
+            reinstalled = true;
         } else {
             eprintln!("{combined}");
             return Err("adb install failed.".into());
         }
+    }
+
+    // Push host backup back onto the device before starting the app so state is preserved
+    // across uninstall/reinstall or freshly created AVDs
+    if reinstalled || cfg.state_dir.join("state_backup/config.json").exists() {
+        push_app_state_backup(cfg);
     }
 
     // Allow restricted settings (required on Android 13+ for sideloaded Accessibility services)
@@ -1206,10 +1284,15 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
     });
 
     println!("==> Supervisor active (checking health every 10s, Ctrl+C / SIGTERM to stop)...");
+    let mut tick: u64 = 0;
     while running.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_secs(10));
         if !running.load(Ordering::SeqCst) {
             break;
+        }
+        tick += 1;
+        if tick % 6 == 0 {
+            pull_app_state_backup(&cfg);
         }
 
         // Check if managed emulator exited
@@ -1259,6 +1342,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
     }
 
     println!("==> Shutting down supervisor...");
+    pull_app_state_backup(&cfg);
     if let Some(mut child) = emulator_child {
         let _ = Command::new(adb_bin(&cfg.android_home))
             .args(["emu", "kill"])
