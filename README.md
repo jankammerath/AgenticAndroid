@@ -61,7 +61,33 @@ Then open `http://localhost:8080` in your computer's browser.
 
 ---
 
-## Linux Server Installation (DEB / RPM + systemd)
+## Linux Server Installation (Zero-Conf Installer & Upgrader)
+
+### One-Command Install or Upgrade (Debian/Ubuntu & Fedora/RHEL)
+
+Run `install.sh` on any Linux `x86_64` or `arm64` server (e.g., an AWS EC2 `c8i.xlarge` with nested virtualization enabled):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | sudo bash
+```
+
+The installer is **zero-conf** and idempotent (re-running it upgrades to the latest release without overwriting your credentials or config):
+1. Installs KVM, Java 17, and all Android emulator runtime libraries automatically.
+2. Installs/updates the Android SDK, emulator, and matching system image in `/opt/android-sdk`.
+3. Downloads and installs/upgrades the latest `.deb` or `.rpm` package and starts `agentic-android.service` via `systemd`.
+4. Prompts for the **port** (default `8080`) and **hostname** — if a hostname is provided, installs **Caddy** and automatically provisions & renews **Let's Encrypt HTTPS** (`https://<hostname>`).
+5. On a fresh install, automatically configures a default **username (`admin`) and generated password** (without MFA) and prints them at the end.
+
+For non-interactive installs, you can pass environment variables:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | \
+  sudo PORT=8080 HOSTNAME_DOMAIN=android.example.com LETSENCRYPT_EMAIL=you@example.com bash
+```
+
+---
+
+### Manual DEB / RPM Installation & Dependencies
 
 The `.deb` and `.rpm` packages install the `agentic-android` Rust CLI (`/usr/bin/agentic-android`), the bundled universal APK (`/usr/share/agentic-android/AgenticAndroid.apk`), a default config (`/etc/agentic-android/config.toml`), and a `systemd` service (`agentic-android.service`) that runs a headless Android emulator in the background.
 
