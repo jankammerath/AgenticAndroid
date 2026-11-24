@@ -132,13 +132,13 @@ rm -rf cmdline-tools.zip cmdline-tools-tmp
 export ANDROID_HOME=/opt/android-sdk
 export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
-# Accept licenses and install platform-tools, emulator, and an x86_64 Google APIs system image
+# Accept licenses and install platform-tools, emulator, and an x86_64 Google Play Store system image
 yes | sudo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
 sudo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
   "emulator" \
   "platforms;android-35" \
-  "system-images;android-35;google_apis;x86_64"
+  "system-images;android-35;google_apis_playstore;x86_64"
 ```
 
 ### 3. Install the Agentic Android Package

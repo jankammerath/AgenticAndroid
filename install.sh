@@ -140,7 +140,7 @@ yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
   "platform-tools" \
   "emulator" \
   "platforms;android-35" \
-  "system-images;android-35;google_apis;${ANDROID_ABI}"
+  "system-images;android-35;google_apis_playstore;${ANDROID_ABI}"
 
 echo "==> [3/6] Downloading & installing/upgrading latest Agentic Android package..."
 TMP_PKG_DIR="$(mktemp -d)"

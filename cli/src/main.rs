@@ -443,8 +443,15 @@ fn cmd_list_avds() -> Result<(), String> {
 }
 
 fn list_avds(android_home: &Path) -> Result<Vec<String>, String> {
-    let out = Command::new(emulator_bin(android_home))
-        .arg("-list-avds")
+    let mut cmd = Command::new(emulator_bin(android_home));
+    cmd.arg("-list-avds");
+    if env::var_os("ANDROID_AVD_HOME").is_none() {
+        let server_avd_home = PathBuf::from("/var/lib/agentic-android/.android/avd");
+        if server_avd_home.exists() {
+            cmd.env("ANDROID_AVD_HOME", server_avd_home);
+        }
+    }
+    let out = cmd
         .output()
         .map_err(|e| format!("Failed to run emulator -list-avds: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
@@ -665,6 +672,15 @@ fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, S
         }
     }
     found.sort();
+    // Prefer Google Play Store system images when available
+    if let Some(play) = found
+        .iter()
+        .rev()
+        .find(|pkg| pkg.contains(";google_apis_playstore;"))
+        .cloned()
+    {
+        return Ok(play);
+    }
     found
         .pop()
         .ok_or_else(|| format!("No Android system image found for ABI '{abi}' in {}", base.display()))
