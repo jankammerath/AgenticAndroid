@@ -95,7 +95,7 @@ async fn execute_agent_loop(
 
     let config = state.config.read().await.clone();
     let api_key = config.api_keys.get(&provider).to_string();
-    let max_steps = config.max_agent_steps.clamp(1, 50);
+    let max_steps = config.max_agent_steps.clamp(1, 1024);
 
     // Build initial conversation context
     let mut turn_messages: Vec<TurnMessage> = Vec::new();

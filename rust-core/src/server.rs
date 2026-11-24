@@ -639,7 +639,7 @@ async fn api_update_config(
             }
         }
         if let Some(steps) = req.max_agent_steps {
-            cfg.max_agent_steps = steps.clamp(1, 50);
+            cfg.max_agent_steps = steps.clamp(1, 1024);
         }
         if let Some(delay) = req.step_delay_ms {
             cfg.step_delay_ms = delay.min(5000);
