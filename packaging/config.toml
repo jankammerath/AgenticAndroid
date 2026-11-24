@@ -18,3 +18,8 @@ android_home = "/opt/android-sdk"
 
 # State directory for PID files and emulator/daemon logs
 state_dir = "/var/lib/agentic-android"
+
+# Optional fixed GPS location for the emulator (decimal degrees)
+# latitude = 50.7374
+# longitude = 7.0982
+# altitude = 60.0

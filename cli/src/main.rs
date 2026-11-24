@@ -53,6 +53,19 @@ enum Commands {
 
     /// List available Android Virtual Devices (AVDs)
     Avds,
+
+    /// Set the running emulator's GPS location (latitude / longitude)
+    Geo {
+        /// Latitude in decimal degrees (e.g. 50.7374)
+        #[arg(long, allow_hyphen_values = true)]
+        lat: f64,
+        /// Longitude in decimal degrees (e.g. 7.0982)
+        #[arg(long, allow_hyphen_values = true)]
+        lon: f64,
+        /// Optional altitude in meters
+        #[arg(long, allow_hyphen_values = true)]
+        alt: Option<f64>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -123,6 +136,18 @@ struct RunOpts {
     /// Directory for PID and log files (default: ~/.agentic-android)
     #[arg(long)]
     state_dir: Option<PathBuf>,
+
+    /// Optional GPS latitude in decimal degrees to set on the emulator (e.g. 50.7374)
+    #[arg(long, env = "EMU_LATITUDE", allow_hyphen_values = true)]
+    lat: Option<f64>,
+
+    /// Optional GPS longitude in decimal degrees to set on the emulator (e.g. 7.0982)
+    #[arg(long, env = "EMU_LONGITUDE", allow_hyphen_values = true)]
+    lon: Option<f64>,
+
+    /// Optional GPS altitude in meters
+    #[arg(long, env = "EMU_ALTITUDE", allow_hyphen_values = true)]
+    alt: Option<f64>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -137,6 +162,9 @@ struct FileConfig {
     android_home: Option<PathBuf>,
     java_home: Option<PathBuf>,
     android_ndk_home: Option<PathBuf>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+    altitude: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +181,9 @@ struct EffectiveConfig {
     android_home: PathBuf,
     java_home: Option<PathBuf>,
     ndk_home: Option<PathBuf>,
+    latitude: Option<f64>,
+    longitude: Option<f64>,
+    altitude: Option<f64>,
 }
 
 fn main() {
@@ -160,6 +191,7 @@ fn main() {
 
     let res = match cli.command {
         Some(Commands::Avds) => cmd_list_avds(),
+        Some(Commands::Geo { lat, lon, alt }) => cmd_set_geo(lat, lon, alt),
         Some(Commands::Stop { serial, state_dir }) => cmd_stop_emulator(serial, state_dir),
         Some(Commands::Daemon { action }) => match action {
             DaemonAction::Start(opts) => cmd_daemon_start(opts),
@@ -349,6 +381,9 @@ fn load_config(opts: &RunOpts) -> Result<EffectiveConfig, String> {
         android_home,
         java_home,
         ndk_home,
+        latitude: opts.lat.or(file_cfg.latitude),
+        longitude: opts.lon.or(file_cfg.longitude),
+        altitude: opts.alt.or(file_cfg.altitude),
     })
 }
 
@@ -427,6 +462,49 @@ fn cmd_stop_emulator(serial: Option<String>, state_dir: Option<PathBuf>) -> Resu
 
     println!("Sent shutdown signal to emulator(s): {}", targets.join(", "));
     Ok(())
+}
+
+fn cmd_set_geo(lat: f64, lon: f64, alt: Option<f64>) -> Result<(), String> {
+    let android_home = detect_android_home(None)?;
+    set_emulator_location(&android_home, lat, lon, alt)?;
+    println!("Set emulator GPS location to lat={lat}, lon={lon}");
+    Ok(())
+}
+
+fn set_emulator_location(
+    android_home: &Path,
+    lat: f64,
+    lon: f64,
+    alt: Option<f64>,
+) -> Result<(), String> {
+    // Note: `adb emu geo fix` takes <longitude> <latitude> [altitude]
+    let mut args = vec![
+        "emu".to_string(),
+        "geo".to_string(),
+        "fix".to_string(),
+        format!("{lon}"),
+        format!("{lat}"),
+    ];
+    if let Some(a) = alt {
+        args.push(format!("{a}"));
+    }
+    let status = Command::new(adb_bin(android_home))
+        .args(&args)
+        .status()
+        .map_err(|e| format!("Failed to run adb emu geo fix: {e}"))?;
+    if !status.success() {
+        return Err("adb emu geo fix failed (is an emulator running?).".into());
+    }
+    Ok(())
+}
+
+fn apply_configured_location(cfg: &EffectiveConfig) {
+    if let (Some(lat), Some(lon)) = (cfg.latitude, cfg.longitude) {
+        match set_emulator_location(&cfg.android_home, lat, lon, cfg.altitude) {
+            Ok(()) => println!("    Set emulator GPS location: lat={lat}, lon={lon}"),
+            Err(e) => eprintln!("WARNING: Could not set emulator GPS location: {e}"),
+        }
+    }
 }
 
 fn cmd_list_avds() -> Result<(), String> {
@@ -814,6 +892,9 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
     // Re-verify accessibility binding after force-stop/start (-S)
     ensure_accessibility_enabled(&cfg.android_home)?;
 
+    // Apply configured GPS coordinates if set in config.toml or CLI flags
+    apply_configured_location(cfg);
+
     Ok(())
 }
 
@@ -1161,6 +1242,15 @@ fn cmd_daemon_start(opts: RunOpts) -> Result<(), String> {
     }
     if let Some(ref root) = opts.project_root {
         args.extend(["--project-root".into(), root.display().to_string()]);
+    }
+    if let Some(lat) = opts.lat {
+        args.extend(["--lat".into(), lat.to_string()]);
+    }
+    if let Some(lon) = opts.lon {
+        args.extend(["--lon".into(), lon.to_string()]);
+    }
+    if let Some(alt) = opts.alt {
+        args.extend(["--alt".into(), alt.to_string()]);
     }
     args.extend(["--state-dir".into(), state_dir.display().to_string()]);
 

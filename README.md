@@ -230,9 +230,12 @@ cargo build --release --manifest-path cli/Cargo.toml
 
 # List available AVDs
 ./launch.sh avds
+
+# Update GPS coordinates of a running emulator on the fly
+./launch.sh geo --lat 50.7374 --lon 7.0982
 ```
 
-You can also store defaults in `~/.agentic-android/config.toml` (or pass `--config <path>`):
+You can also store defaults in `~/.agentic-android/config.toml` or `/etc/agentic-android/config.toml` (or pass `--config <path>`):
 
 ```toml
 avd = "Pixel_9a"
@@ -240,6 +243,9 @@ apk = "/opt/agentic/AgenticAndroid.apk"
 port = 8080
 headless = true
 android_home = "/opt/android-sdk"
+latitude = 50.7374
+longitude = 7.0982
+# altitude = 60.0
 ```
 
 Once running, open **http://localhost:8080** in your browser.
