@@ -764,8 +764,31 @@ fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, S
         .ok_or_else(|| format!("No Android system image found for ABI '{abi}' in {}", base.display()))
 }
 
+fn cleanup_stale_avd_locks(avd_name: &str) {
+    let avd_home = env::var_os("ANDROID_AVD_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let server_home = PathBuf::from("/var/lib/agentic-android/.android/avd");
+            if server_home.exists() {
+                server_home
+            } else {
+                home_dir().join(".android/avd")
+            }
+        });
+    let avd_dir = avd_home.join(format!("{avd_name}.avd"));
+    if let Ok(entries) = fs::read_dir(&avd_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("lock") {
+                let _ = fs::remove_file(&path);
+            }
+        }
+    }
+}
+
 fn spawn_emulator(cfg: &EffectiveConfig, avd_name: &str) -> Result<Child, String> {
     fs::create_dir_all(&cfg.state_dir).map_err(|e| format!("Failed to create state dir: {e}"))?;
+    cleanup_stale_avd_locks(avd_name);
     let log_path = cfg.state_dir.join("emulator.log");
     let log_file = OpenOptions::new()
         .create(true)
@@ -808,18 +831,52 @@ fn spawn_emulator(cfg: &EffectiveConfig, avd_name: &str) -> Result<Child, String
         .map_err(|e| format!("Failed to start emulator: {e}"))
 }
 
-fn wait_for_emulator_boot(android_home: &Path, timeout_secs: u64) -> Result<(), String> {
+fn wait_for_emulator_boot(
+    cfg: &EffectiveConfig,
+    mut emulator_child: Option<&mut Child>,
+    timeout_secs: u64,
+) -> Result<(), String> {
     println!("    Waiting for emulator to boot...");
-    let adb = adb_bin(android_home);
-    let _ = Command::new(&adb).arg("wait-for-device").status();
+    let adb = adb_bin(&cfg.android_home);
+    let _ = Command::new(&adb).arg("start-server").status();
 
     let attempts = (timeout_secs / 2).max(1);
+    let mut restarted_adb_for_unauth = false;
     for _ in 0..attempts {
+        if let Some(child) = emulator_child.as_deref_mut() {
+            if let Ok(Some(exit_status)) = child.try_wait() {
+                let log_path = cfg.state_dir.join("emulator.log");
+                let tail = fs::read_to_string(&log_path)
+                    .ok()
+                    .map(|s| {
+                        let lines: Vec<&str> = s.lines().collect();
+                        let start = lines.len().saturating_sub(20);
+                        lines[start..].join("\n")
+                    })
+                    .unwrap_or_default();
+                return Err(format!(
+                    "Emulator exited prematurely ({exit_status}). Recent emulator.log:\n{tail}"
+                ));
+            }
+        }
+
+        // Self-heal if an existing adb server was started with a different HOME/adbkey
+        if !restarted_adb_for_unauth {
+            if let Ok(devs) = Command::new(&adb).arg("devices").output() {
+                if String::from_utf8_lossy(&devs.stdout).contains("unauthorized") {
+                    eprintln!("    Detected unauthorized emulator (mismatched adbkey); restarting adb server...");
+                    let _ = Command::new(&adb).arg("kill-server").status();
+                    let _ = Command::new(&adb).arg("start-server").status();
+                    restarted_adb_for_unauth = true;
+                }
+            }
+        }
+
         if let Ok(out) = Command::new(&adb)
             .args(["shell", "getprop", "sys.boot_completed"])
             .output()
         {
-            if String::from_utf8_lossy(&out.stdout).trim() == "1" {
+            if out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "1" {
                 thread::sleep(Duration::from_secs(2));
                 return Ok(());
             }
@@ -1115,7 +1172,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         let avd_name = select_or_create_avd(&cfg)?;
         active_avd = Some(avd_name.clone());
         emulator_child = Some(spawn_emulator(&cfg, &avd_name)?);
-        wait_for_emulator_boot(&cfg.android_home, 180)?;
+        wait_for_emulator_boot(&cfg, emulator_child.as_mut(), 180)?;
     }
 
     install_and_configure(&cfg, &apk_path)?;
@@ -1164,7 +1221,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                 if let Some(ref avd_name) = active_avd {
                     if let Ok(new_child) = spawn_emulator(&cfg, avd_name) {
                         *child = new_child;
-                        let _ = wait_for_emulator_boot(&cfg.android_home, 180);
+                        let _ = wait_for_emulator_boot(&cfg, Some(child), 180);
                         let _ = install_and_configure(&cfg, &apk_path);
                     }
                 }
