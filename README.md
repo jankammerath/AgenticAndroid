@@ -28,7 +28,7 @@ Agentic Android is an app built in **Rust** with a minimal **Kotlin** app fronte
          <img src="screenshots/mobile-chat.png" alt="Agentic Android chat on mobile" />
       </td>
       <td>
-         <img src="screenshots/mobile-controls.png" alt="Agentic Android device controls on mobile" />
+         <img src="screenshots/mobile-settings.png" alt="Agentic Android device controls on mobile" />
       </td>
       <td>
          <img src="screenshots/mobile-menu.png" alt="Agentic Android main menu on mobile" />
@@ -39,7 +39,7 @@ Agentic Android is an app built in **Rust** with a minimal **Kotlin** app fronte
 <table>
    <tr>
       <td>
-         <img src="screenshots/agenticandroid-travel.png" alt="Agentic Android planning travel" />
+         <img src="screenshots/agenticandroid-desktop.png" alt="Agentic Android planning travel" />
       </td>
    </tr>
 </table>

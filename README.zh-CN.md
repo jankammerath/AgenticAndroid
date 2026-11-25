@@ -28,7 +28,7 @@ Agentic Android 是一款以 **Rust** 为核心、搭配极简 **Kotlin** 前端
          <img src="screenshots/mobile-chat.png" alt="Agentic Android 移动端聊天界面" />
       </td>
       <td>
-         <img src="screenshots/mobile-controls.png" alt="Agentic Android 移动端设备控制" />
+         <img src="screenshots/mobile-settings.png" alt="Agentic Android 移动端设备控制" />
       </td>
       <td>
          <img src="screenshots/mobile-menu.png" alt="Agentic Android 移动端主菜单" />
@@ -39,7 +39,7 @@ Agentic Android 是一款以 **Rust** 为核心、搭配极简 **Kotlin** 前端
 <table>
    <tr>
       <td>
-         <img src="screenshots/agenticandroid-travel.png" alt="Agentic Android 规划行程示例" />
+         <img src="screenshots/agenticandroid-desktop.png" alt="Agentic Android 规划行程示例" />
       </td>
    </tr>
 </table>

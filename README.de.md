@@ -28,7 +28,7 @@ Agentic Android ist eine in **Rust** entwickelte App mit einem minimalen **Kotli
          <img src="screenshots/mobile-chat.png" alt="Agentic Android Chat mobil" />
       </td>
       <td>
-         <img src="screenshots/mobile-controls.png" alt="Agentic Android Gerätesteuerung mobil" />
+         <img src="screenshots/mobile-settings.png" alt="Agentic Android Gerätesteuerung mobil" />
       </td>
       <td>
          <img src="screenshots/mobile-menu.png" alt="Agentic Android Hauptmenü mobil" />
@@ -39,7 +39,7 @@ Agentic Android ist eine in **Rust** entwickelte App mit einem minimalen **Kotli
 <table>
    <tr>
       <td>
-         <img src="screenshots/agenticandroid-travel.png" alt="Agentic Android bei der Reiseplanung" />
+         <img src="screenshots/agenticandroid-desktop.png" alt="Agentic Android bei der Reiseplanung" />
       </td>
    </tr>
 </table>
