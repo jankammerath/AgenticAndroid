@@ -1772,9 +1772,16 @@ fn detect_running_avd_name(android_home: &Path) -> Option<String> {
 }
 
 fn stop_managed_emulator(cfg: &EffectiveConfig, emulator_child: &mut Option<Child>) {
-    let _ = Command::new(adb_bin(&cfg.android_home))
-        .args(["emu", "kill"])
-        .status();
+    let adb = adb_bin(&cfg.android_home);
+    let running_emus = find_running_emulators(&cfg.android_home);
+    if running_emus.is_empty() {
+        let _ = Command::new(&adb).args(["emu", "kill"]).status();
+    } else {
+        for emu in &running_emus {
+            let _ = Command::new(&adb).args(["-s", emu, "emu", "kill"]).status();
+        }
+    }
+
     if let Some(mut child) = emulator_child.take() {
         let mut exited = false;
         for _ in 0..30 {
@@ -1789,6 +1796,15 @@ fn stop_managed_emulator(cfg: &EffectiveConfig, emulator_child: &mut Option<Chil
             let _ = child.wait();
         }
     }
+
+    // Also wait until adb reports no running emulators (covers pre-existing/detached emulators)
+    for _ in 0..30 {
+        if find_running_emulators(&cfg.android_home).is_empty() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(500));
+    }
+    thread::sleep(Duration::from_secs(2));
 }
 
 fn cmd_run(opts: RunOpts) -> Result<(), String> {
@@ -1920,21 +1936,37 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
             pull_app_state_backup(&cfg);
         }
 
-        // Check if managed emulator exited
-        if let Some(ref mut child) = emulator_child {
-            if let Ok(Some(exit_status)) = child.try_wait() {
-                eprintln!(
-                    "Emulator exited ({exit_status}); restarting..."
-                );
-                if let Some(ref avd_name) = active_avd {
-                    if let Ok(new_child) = spawn_emulator(&cfg, avd_name) {
-                        *child = new_child;
-                        let _ = wait_for_emulator_boot(&cfg, Some(child), 180);
-                        let _ = install_and_configure(&cfg, &apk_path);
-                    }
+        // Check if managed emulator exited OR no emulator device is attached anymore
+        let child_exited = if let Some(ref mut child) = emulator_child {
+            match child.try_wait() {
+                Ok(Some(exit_status)) => {
+                    eprintln!("Emulator exited ({exit_status}); restarting...");
+                    emulator_child = None;
+                    true
                 }
-                continue;
+                _ => false,
             }
+        } else {
+            false
+        };
+
+        if child_exited || find_running_device(&cfg.android_home).is_none() {
+            if !child_exited {
+                eprintln!("No running Android emulator detected; restarting...");
+                stop_managed_emulator(&cfg, &mut emulator_child);
+            }
+            let avd_name = active_avd
+                .clone()
+                .unwrap_or_else(|| "agentic_android_avd".to_string());
+            if let Ok(mut new_child) = spawn_emulator(&cfg, &avd_name) {
+                let _ = wait_for_emulator_boot(&cfg, Some(&mut new_child), 180);
+                emulator_child = Some(new_child);
+                if install_and_configure(&cfg, &apk_path).is_ok() && wait_for_health(cfg.port, 25) {
+                    restore_app_state_backup(&cfg);
+                    pull_app_state_backup(&cfg);
+                }
+            }
+            continue;
         }
 
         // Ensure accessibility stays bound even if app health is OK

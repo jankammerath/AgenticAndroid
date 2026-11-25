@@ -2113,12 +2113,14 @@
 
   // Managed Emulator Config (/emulator-config)
   let emuPollTimer = null;
+  let emuKnownManaged = false;
 
   async function loadEmulatorConfig() {
     try {
       const data = await api("/emulator-config");
       const managed = !!data?.managed;
-      els.tabBtnEmulator.classList.toggle("hidden", !managed);
+      if (managed) emuKnownManaged = true;
+      els.tabBtnEmulator.classList.toggle("hidden", !managed && !emuKnownManaged);
       if (!managed) return;
 
       els.emuCurrentAvd.textContent = data.current_avd || "--";
@@ -2167,9 +2169,7 @@
       els.btnEmuRestart.disabled = busy;
       els.btnEmuSwitch.disabled = busy;
       els.btnEmuCreate.disabled = busy;
-      if (data.task_status) {
-        els.emuMsg.textContent = data.task_status;
-      }
+      els.emuMsg.textContent = data.task_status || "";
 
       if (busy && !emuPollTimer) {
         emuPollTimer = setInterval(loadEmulatorConfig, 3000);
@@ -2178,7 +2178,15 @@
         emuPollTimer = null;
       }
     } catch {
-      els.tabBtnEmulator.classList.add("hidden");
+      if (emuKnownManaged) {
+        // Server is temporarily unreachable (e.g. HTTP 502 while emulator is rebooting); keep tab & poll
+        els.emuMsg.textContent = t("emulator.restarting");
+        if (!emuPollTimer) {
+          emuPollTimer = setInterval(loadEmulatorConfig, 3000);
+        }
+      } else {
+        els.tabBtnEmulator.classList.add("hidden");
+      }
     }
   }
 
