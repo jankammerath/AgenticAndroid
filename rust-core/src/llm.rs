@@ -220,6 +220,17 @@ pub fn device_tool_definitions() -> Vec<Value> {
             }
         }),
         json!({
+            "name": "get_credential",
+            "description": "Retrieve stored login credentials (username, password, notes) for an app or website by ID or search query (label, package name, or domain). Only call this when you need to log into that app or website.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Optional exact credential ID from the saved credentials directory" },
+                    "query": { "type": "string", "description": "Optional search text matching label, app package name, website domain, or username" }
+                }
+            }
+        }),
+        json!({
             "name": "get_app_notes",
             "description": "Read the saved UI playbook notes for a specific Android app package.",
             "parameters": {

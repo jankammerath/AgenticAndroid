@@ -106,9 +106,10 @@ async fn execute_agent_loop(
             if is_last {
                 let ui_context = build_device_context(&state, &bridge, config.include_screenshot).await;
                 let app_directory = build_app_directory(&state).await;
+                let cred_directory = build_credentials_directory(&state).await;
                 let enriched = format!(
-                    "{}{}\n\n[Current Android Device State]\n{}",
-                    msg.content, app_directory, ui_context.0
+                    "{}{}{}\n\n[Current Android Device State]\n{}",
+                    msg.content, app_directory, cred_directory, ui_context.0
                 );
                 turn_messages.push(TurnMessage::User {
                     text: enriched,
@@ -186,19 +187,21 @@ async fn execute_agent_loop(
             });
 
             let result_str = execute_agent_tool(&state, &bridge, &call.name, &call.arguments).await;
+            let (trace_args, trace_result) =
+                redact_sensitive_trace(&state, &call.name, &call.arguments, &result_str).await;
 
             let trace = ToolTrace {
                 tool_name: call.name.clone(),
-                arguments: call.arguments.clone(),
-                result: result_str.clone(),
+                arguments: trace_args.clone(),
+                result: trace_result.clone(),
             };
             collected_traces.push(trace);
 
             let _ = state.event_tx.send(AgentEvent::ToolCall {
                 session_id: session_id.clone(),
                 tool_name: call.name.clone(),
-                arguments: call.arguments.clone(),
-                result: result_str.clone(),
+                arguments: trace_args,
+                result: trace_result,
             });
 
             turn_messages.push(TurnMessage::ToolResult {
@@ -270,6 +273,57 @@ async fn build_app_directory(state: &Arc<AppState>) -> String {
         out.push_str(&format!("- {}: {}\n", name, pb.purpose.trim()));
     }
     out
+}
+
+async fn build_credentials_directory(state: &Arc<AppState>) -> String {
+    let list = state.credentials.read().await;
+    if list.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from(
+        "\n\n[Saved Credentials Available (call `get_credential` when login is required)]\n",
+    );
+    for c in list.iter().take(40) {
+        out.push_str(&format!(
+            "- id={} | label={} | target={} | username={}\n",
+            c.id,
+            c.label.trim(),
+            c.target.trim(),
+            c.username.trim()
+        ));
+    }
+    out
+}
+
+async fn redact_sensitive_trace(
+    state: &Arc<AppState>,
+    tool_name: &str,
+    args: &Value,
+    result: &str,
+) -> (Value, String) {
+    let mut safe_args = args.clone();
+    let mut safe_result = result.to_string();
+
+    if tool_name == "get_credential" {
+        if let Ok(mut parsed) = serde_json::from_str::<Value>(result) {
+            if parsed.get("password").and_then(|v| v.as_str()).is_some() {
+                parsed["password"] = json!("[REDACTED]");
+                safe_result = parsed.to_string();
+            }
+        }
+    } else if tool_name == "type_text" {
+        if let Some(typed) = args.get("text").and_then(|v| v.as_str()) {
+            if !typed.is_empty() {
+                let creds = state.credentials.read().await;
+                if creds.iter().any(|c| !c.password.is_empty() && c.password == typed) {
+                    if let Some(obj) = safe_args.as_object_mut() {
+                        obj.insert("text".to_string(), json!("[REDACTED]"));
+                    }
+                }
+            }
+        }
+    }
+    (safe_args, safe_result)
 }
 
 async fn build_device_context(
@@ -350,7 +404,49 @@ pub async fn execute_agent_tool(
         "save_app_note" => handle_save_app_note(state, args).await,
         "delete_app_note" => handle_delete_app_note(state, args).await,
         "get_app_notes" => handle_get_app_notes(state, args).await,
+        "get_credential" => handle_get_credential(state, args).await,
         _ => execute_device_tool(bridge, name, args).await,
+    }
+}
+
+async fn handle_get_credential(state: &Arc<AppState>, args: &Value) -> String {
+    let id = args["id"].as_str().unwrap_or("").trim();
+    let query = args["query"].as_str().unwrap_or("").trim().to_lowercase();
+    if id.is_empty() && query.is_empty() {
+        return json!({
+            "ok": false,
+            "error": "Provide either 'id' or 'query' to look up a credential."
+        })
+        .to_string();
+    }
+
+    let list = state.credentials.read().await;
+    let found = if !id.is_empty() {
+        list.iter().find(|c| c.id == id)
+    } else {
+        list.iter().find(|c| {
+            c.label.to_lowercase().contains(&query)
+                || c.target.to_lowercase().contains(&query)
+                || c.username.to_lowercase().contains(&query)
+        })
+    };
+
+    match found {
+        Some(c) => json!({
+            "ok": true,
+            "id": c.id,
+            "label": c.label,
+            "target": c.target,
+            "username": c.username,
+            "password": c.password,
+            "notes": c.notes
+        })
+        .to_string(),
+        None => json!({
+            "ok": false,
+            "error": "No matching credential found."
+        })
+        .to_string(),
     }
 }
 

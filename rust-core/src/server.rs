@@ -2,7 +2,7 @@ use crate::agent::{execute_device_tool, run_agent_turn};
 use crate::auth;
 use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
-use crate::state::{now_ms, AppPlaybook, AppState, Provider, Session};
+use crate::state::{now_ms, AppPlaybook, AppState, CredentialEntry, Provider, Session};
 use crate::telegram::spawn_telegram_worker;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Request, State};
@@ -75,6 +75,16 @@ pub async fn start_http_server(
         .route(
             "/api/app-memory/:package",
             axum::routing::put(api_upsert_app_memory).delete(api_delete_app_memory),
+        )
+        .route(
+            "/api/credentials",
+            get(api_list_credentials).post(api_create_credential),
+        )
+        .route(
+            "/api/credentials/:id",
+            get(api_get_credential)
+                .put(api_update_credential)
+                .delete(api_delete_credential),
         )
         .route("/api/auth/credentials", post(api_auth_set_credentials))
         .route("/api/auth/disable", post(api_auth_disable))
@@ -547,11 +557,13 @@ async fn api_internal_backup(
     let sessions = ctx.state.sessions.read().await.clone();
     let auth_tokens = ctx.state.auth_tokens.read().await.clone();
     let app_playbooks = ctx.state.app_playbooks.read().await.clone();
+    let credentials = ctx.state.credentials.read().await.clone();
     Json(json!({
         "config": config,
         "sessions": sessions,
         "auth_tokens": auth_tokens,
-        "app_playbooks": app_playbooks
+        "app_playbooks": app_playbooks,
+        "credentials": credentials
     }))
     .into_response()
 }
@@ -562,6 +574,7 @@ struct RestoreBackupPayload {
     sessions: Option<Vec<Session>>,
     auth_tokens: Option<std::collections::HashMap<String, u64>>,
     app_playbooks: Option<std::collections::HashMap<String, AppPlaybook>>,
+    credentials: Option<Vec<CredentialEntry>>,
 }
 
 async fn api_internal_restore(
@@ -607,6 +620,10 @@ async fn api_internal_restore(
     if let Some(playbooks) = payload.app_playbooks {
         *ctx.state.app_playbooks.write().await = playbooks;
         ctx.state.save_app_playbooks().await;
+    }
+    if let Some(creds) = payload.credentials {
+        *ctx.state.credentials.write().await = creds;
+        ctx.state.save_credentials().await;
     }
 
     log::info!("Restored Agentic Android state from host backup");
@@ -1125,6 +1142,110 @@ async fn api_delete_app_memory(
 ) -> Json<Value> {
     ctx.state.app_playbooks.write().await.remove(package.trim());
     ctx.state.save_app_playbooks().await;
+    Json(json!({ "ok": true }))
+}
+
+fn credential_summary(c: &CredentialEntry) -> Value {
+    json!({
+        "id": c.id,
+        "label": c.label,
+        "target": c.target,
+        "username": c.username,
+        "has_password": !c.password.is_empty(),
+        "notes": c.notes,
+        "updated_at_ms": c.updated_at_ms,
+    })
+}
+
+async fn api_list_credentials(State(ctx): State<ServerCtx>) -> Json<Vec<Value>> {
+    let mut items = ctx.state.credentials.read().await.clone();
+    items.sort_by(|a, b| b.updated_at_ms.cmp(&a.updated_at_ms));
+    Json(items.iter().map(credential_summary).collect())
+}
+
+async fn api_get_credential(
+    State(ctx): State<ServerCtx>,
+    Path(id): Path<String>,
+) -> Result<Json<CredentialEntry>, StatusCode> {
+    let items = ctx.state.credentials.read().await;
+    items
+        .iter()
+        .find(|c| c.id == id)
+        .cloned()
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+#[derive(Deserialize)]
+struct UpsertCredentialRequest {
+    #[serde(default)]
+    label: String,
+    #[serde(default)]
+    target: String,
+    #[serde(default)]
+    username: String,
+    #[serde(default)]
+    password: String,
+    #[serde(default)]
+    notes: String,
+}
+
+async fn api_create_credential(
+    State(ctx): State<ServerCtx>,
+    Json(req): Json<UpsertCredentialRequest>,
+) -> Result<Json<CredentialEntry>, StatusCode> {
+    let label = req.label.trim().to_string();
+    let target = req.target.trim().to_string();
+    if label.is_empty() && target.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let entry = CredentialEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        label: if label.is_empty() { target.clone() } else { label },
+        target,
+        username: req.username.trim().to_string(),
+        password: req.password,
+        notes: req.notes.trim().to_string(),
+        updated_at_ms: now_ms(),
+    };
+    ctx.state.credentials.write().await.push(entry.clone());
+    ctx.state.save_credentials().await;
+    Ok(Json(entry))
+}
+
+async fn api_update_credential(
+    State(ctx): State<ServerCtx>,
+    Path(id): Path<String>,
+    Json(req): Json<UpsertCredentialRequest>,
+) -> Result<Json<CredentialEntry>, StatusCode> {
+    let label = req.label.trim().to_string();
+    let target = req.target.trim().to_string();
+    if label.is_empty() && target.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let updated = {
+        let mut list = ctx.state.credentials.write().await;
+        let Some(item) = list.iter_mut().find(|c| c.id == id) else {
+            return Err(StatusCode::NOT_FOUND);
+        };
+        item.label = if label.is_empty() { target.clone() } else { label };
+        item.target = target;
+        item.username = req.username.trim().to_string();
+        item.password = req.password;
+        item.notes = req.notes.trim().to_string();
+        item.updated_at_ms = now_ms();
+        item.clone()
+    };
+    ctx.state.save_credentials().await;
+    Ok(Json(updated))
+}
+
+async fn api_delete_credential(
+    State(ctx): State<ServerCtx>,
+    Path(id): Path<String>,
+) -> Json<Value> {
+    ctx.state.credentials.write().await.retain(|c| c.id != id);
+    ctx.state.save_credentials().await;
     Json(json!({ "ok": true }))
 }
 

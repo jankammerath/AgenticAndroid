@@ -255,6 +255,22 @@ pub struct AppPlaybook {
     pub updated_at_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialEntry {
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub target: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub notes: String,
+    pub updated_at_ms: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct VideoFrame {
     pub jpeg: Bytes,
@@ -315,6 +331,7 @@ pub struct AppState {
     pub telegram_status: RwLock<String>,
     pub telegram_sessions: Mutex<HashMap<i64, String>>, // chat_id -> session_id
     pub app_playbooks: RwLock<HashMap<String, AppPlaybook>>,
+    pub credentials: RwLock<Vec<CredentialEntry>>,
     pub http_client: reqwest::Client,
 }
 
@@ -336,6 +353,7 @@ impl AppState {
                     "sessions.json",
                     "auth_tokens.json",
                     "app_playbooks.json",
+                    "credentials.json",
                 ] {
                     let src = bdir.join(fname);
                     let dst = config_dir.join(fname);
@@ -351,6 +369,7 @@ impl AppState {
                     "sessions.json",
                     "auth_tokens.json",
                     "app_playbooks.json",
+                    "credentials.json",
                 ] {
                     let src = config_dir.join(fname);
                     let dst = bdir.join(fname);
@@ -398,6 +417,9 @@ impl AppState {
         let app_playbooks =
             load_json::<HashMap<String, AppPlaybook>>(&config_dir.join("app_playbooks.json"))
                 .unwrap_or_default();
+        let credentials =
+            load_json::<Vec<CredentialEntry>>(&config_dir.join("credentials.json"))
+                .unwrap_or_default();
 
         Arc::new(Self {
             config_dir,
@@ -416,6 +438,7 @@ impl AppState {
             telegram_status: RwLock::new("Disabled".to_string()),
             telegram_sessions: Mutex::new(telegram_sessions),
             app_playbooks: RwLock::new(app_playbooks),
+            credentials: RwLock::new(credentials),
             http_client,
         })
     }
@@ -432,6 +455,13 @@ impl AppState {
         let path = self.config_dir.join("app_playbooks.json");
         let _ = save_json(&path, &map);
         self.mirror_to_backup("app_playbooks.json");
+    }
+
+    pub async fn save_credentials(&self) {
+        let list = self.credentials.read().await.clone();
+        let path = self.config_dir.join("credentials.json");
+        let _ = save_json(&path, &list);
+        self.mirror_to_backup("credentials.json");
     }
 
     pub async fn save_config(&self) {

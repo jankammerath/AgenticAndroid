@@ -6,6 +6,11 @@
     providerModelsCache: {},
     config: null,
     sessions: [],
+    appMemory: [],
+    credentials: [],
+    sidebarTab: "sessions",
+    openTabs: [],
+    activeTabKey: null,
     activeSessionId: null,
     deviceWidth: 1080,
     deviceHeight: 2400,
@@ -52,7 +57,18 @@
     btnCloseSettings: document.getElementById("btn-close-settings"),
     btnWarnSettings: document.getElementById("btn-warn-settings"),
     btnNewSession: document.getElementById("btn-new-session"),
+    btnNewMemory: document.getElementById("btn-new-memory"),
+    btnNewCredential: document.getElementById("btn-new-credential"),
+    sidebarPanelSessions: document.getElementById("sidebar-panel-sessions"),
+    sidebarPanelMemory: document.getElementById("sidebar-panel-memory"),
+    sidebarPanelCredentials: document.getElementById("sidebar-panel-credentials"),
     sessionList: document.getElementById("session-list"),
+    memorySidebarList: document.getElementById("memory-sidebar-list"),
+    credentialsSidebarList: document.getElementById("credentials-sidebar-list"),
+    centerTabsBar: document.getElementById("center-tabs-bar"),
+    centerViewSession: document.getElementById("center-view-session"),
+    centerViewMemory: document.getElementById("center-view-memory"),
+    centerViewCredential: document.getElementById("center-view-credential"),
     sessionProvider: document.getElementById("session-provider"),
     sessionModelSelect: document.getElementById("session-model-select"),
     btnRefreshModels: document.getElementById("btn-refresh-models"),
@@ -81,14 +97,24 @@
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
-    tabPanelMemory: document.getElementById("tab-panel-memory"),
-    appMemoryList: document.getElementById("app-memory-list"),
     appMemoryForm: document.getElementById("app-memory-form"),
+    memEditorTitle: document.getElementById("mem-editor-title"),
     memPackage: document.getElementById("mem-package"),
     memLabel: document.getElementById("mem-label"),
     memPurpose: document.getElementById("mem-purpose"),
     memNotes: document.getElementById("mem-notes"),
     memSaveMsg: document.getElementById("mem-save-msg"),
+    btnDeleteMemory: document.getElementById("btn-delete-memory"),
+    credentialForm: document.getElementById("credential-form"),
+    credEditorTitle: document.getElementById("cred-editor-title"),
+    credLabel: document.getElementById("cred-label"),
+    credTarget: document.getElementById("cred-target"),
+    credUsername: document.getElementById("cred-username"),
+    credPassword: document.getElementById("cred-password"),
+    btnToggleCredPw: document.getElementById("btn-toggle-cred-pw"),
+    credNotes: document.getElementById("cred-notes"),
+    credSaveMsg: document.getElementById("cred-save-msg"),
+    btnDeleteCredential: document.getElementById("btn-delete-credential"),
     tabPanelTelegram: document.getElementById("tab-panel-telegram"),
     tabPanelSecurity: document.getElementById("tab-panel-security"),
     tgStatusBadge: document.getElementById("tg-status-badge"),
@@ -311,15 +337,204 @@
     els.keyWarning.classList.toggle("hidden", !!configured);
   }
 
+  function setSidebarTab(tabName) {
+    state.sidebarTab = tabName;
+    document.querySelectorAll(".sidebar-tab-btn").forEach((btn) => {
+      const active = btn.getAttribute("data-sidebar-tab") === tabName;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    els.sidebarPanelSessions.classList.toggle("hidden", tabName !== "sessions");
+    els.sidebarPanelMemory.classList.toggle("hidden", tabName !== "memory");
+    els.sidebarPanelCredentials.classList.toggle("hidden", tabName !== "credentials");
+  }
+
+  document.querySelectorAll(".sidebar-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setSidebarTab(btn.getAttribute("data-sidebar-tab")));
+  });
+
+  function tabIconSvg(kind) {
+    if (kind === "memory") {
+      return `<svg class="center-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
+    }
+    if (kind === "credential") {
+      return `<svg class="center-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+    }
+    return `<svg class="center-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+  }
+
+  function getActiveTab() {
+    return state.openTabs.find((tb) => tb.key === state.activeTabKey) || state.openTabs[0] || null;
+  }
+
+  function ensureAtLeastOneTab() {
+    if (state.openTabs.length === 0 && state.sessions.length > 0) {
+      const first = state.sessions.find((s) => s.id === state.activeSessionId) || state.sessions[0];
+      state.activeSessionId = first.id;
+      const key = `session:${first.id}`;
+      state.openTabs.push({ key, kind: "session", id: first.id, title: first.title });
+      state.activeTabKey = key;
+    }
+  }
+
+  function renderCenterTabs() {
+    ensureAtLeastOneTab();
+    els.centerTabsBar.innerHTML = "";
+    for (const tb of state.openTabs) {
+      const active = tb.key === state.activeTabKey;
+      const btn = document.createElement("div");
+      btn.className = `center-tab ${active ? "active" : ""}`;
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+      btn.innerHTML = `
+        ${tabIconSvg(tb.kind)}
+        <span class="center-tab-title">${escapeHtml(tb.title)}</span>
+        <button type="button" class="center-tab-close" title="Close">&times;</button>
+      `;
+      btn.addEventListener("click", () => {
+        activateCenterTab(tb.key);
+      });
+      btn.querySelector(".center-tab-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeCenterTab(tb.key);
+      });
+      els.centerTabsBar.appendChild(btn);
+    }
+  }
+
+  async function populateMemoryEditorForTab(tab) {
+    els.memSaveMsg.textContent = "";
+    const existing = tab.id ? state.appMemory.find((p) => p.package_name === tab.id) : null;
+    if (existing) {
+      els.memEditorTitle.textContent = existing.app_label || existing.package_name;
+      els.memPackage.value = existing.package_name;
+      els.memLabel.value = existing.app_label || "";
+      els.memPurpose.value = existing.purpose || "";
+      els.memNotes.value = (existing.notes || []).join("\n");
+      els.btnDeleteMemory.classList.remove("hidden");
+    } else {
+      els.memEditorTitle.textContent = t("memory.new_title");
+      els.memPackage.value = "";
+      els.memLabel.value = "";
+      els.memPurpose.value = "";
+      els.memNotes.value = "";
+      els.btnDeleteMemory.classList.add("hidden");
+    }
+  }
+
+  async function populateCredentialEditorForTab(tab) {
+    els.credSaveMsg.textContent = "";
+    els.credPassword.type = "password";
+    els.btnToggleCredPw.textContent = t("credentials.show");
+    if (tab.id) {
+      els.btnDeleteCredential.classList.remove("hidden");
+      try {
+        const full = await api(`/api/credentials/${encodeURIComponent(tab.id)}`);
+        els.credEditorTitle.textContent = full.label || full.target || t("credentials.form_title");
+        els.credLabel.value = full.label || "";
+        els.credTarget.value = full.target || "";
+        els.credUsername.value = full.username || "";
+        els.credPassword.value = full.password || "";
+        els.credNotes.value = full.notes || "";
+      } catch {
+        els.credEditorTitle.textContent = t("credentials.form_title");
+      }
+    } else {
+      els.credEditorTitle.textContent = t("credentials.new_title");
+      els.credLabel.value = "";
+      els.credTarget.value = "";
+      els.credUsername.value = "";
+      els.credPassword.value = "";
+      els.credNotes.value = "";
+      els.btnDeleteCredential.classList.add("hidden");
+    }
+  }
+
+  function renderCenterWorkspace() {
+    ensureAtLeastOneTab();
+    renderCenterTabs();
+    const tab = getActiveTab();
+    if (!tab) return;
+
+    els.centerViewSession.classList.toggle("hidden", tab.kind !== "session");
+    els.centerViewMemory.classList.toggle("hidden", tab.kind !== "memory");
+    els.centerViewCredential.classList.toggle("hidden", tab.kind !== "credential");
+
+    if (tab.kind === "session") {
+      state.activeSessionId = tab.id;
+      const session = getActiveSession();
+      if (session) {
+        els.sessionProvider.value = session.provider;
+        populateModels(session.provider, session.model);
+        if (!state.providerModelsCache[session.provider]) {
+          fetchModelsForProvider(session.provider);
+        }
+      }
+      renderMessages();
+      updateKeyWarning();
+    } else if (tab.kind === "memory") {
+      populateMemoryEditorForTab(tab);
+    } else if (tab.kind === "credential") {
+      populateCredentialEditorForTab(tab);
+    }
+
+    renderSessions();
+    renderMemorySidebar();
+    renderCredentialsSidebar();
+  }
+
+  function activateCenterTab(key, expandMobile = false) {
+    const tab = state.openTabs.find((tb) => tb.key === key);
+    if (!tab) return;
+    state.activeTabKey = key;
+    if (tab.kind === "session") {
+      state.activeSessionId = tab.id;
+    }
+    renderCenterWorkspace();
+    if (expandMobile && window.innerWidth <= 900) {
+      closeMobileOverlays();
+      els.chatPane.classList.add("mobile-expanded");
+      els.mobileChatHandle.setAttribute("aria-expanded", "true");
+      syncMobileBackdrop();
+    }
+  }
+
+  function openCenterTab(tabSpec, expandMobile = false) {
+    const existing = state.openTabs.find((tb) => tb.key === tabSpec.key);
+    if (existing) {
+      existing.title = tabSpec.title;
+      activateCenterTab(existing.key, expandMobile);
+      return;
+    }
+    state.openTabs.push({ ...tabSpec });
+    activateCenterTab(tabSpec.key, expandMobile);
+  }
+
+  function closeCenterTab(key) {
+    const idx = state.openTabs.findIndex((tb) => tb.key === key);
+    if (idx === -1) return;
+    state.openTabs.splice(idx, 1);
+    if (state.activeTabKey === key) {
+      const next = state.openTabs[Math.min(idx, state.openTabs.length - 1)] || null;
+      state.activeTabKey = next ? next.key : null;
+      if (next && next.kind === "session") {
+        state.activeSessionId = next.id;
+      }
+    }
+    renderCenterWorkspace();
+  }
+
   function renderSessions() {
     els.sessionList.innerHTML = "";
+    const activeTab = getActiveTab();
     for (const s of state.sessions) {
       const isTelegram = s.source === "telegram" || !!s.telegram_chat_id;
       const tgBadge = isTelegram
         ? `<span class="session-source-badge" title="${escapeHtml(t("sessions.telegram_badge_title"))}">TG</span>`
         : "";
+      const isSelected = activeTab?.kind === "session" && activeTab.id === s.id;
       const item = document.createElement("div");
-      item.className = `session-item ${s.id === state.activeSessionId ? "active" : ""}`;
+      item.className = `session-item ${isSelected ? "active" : ""}`;
       item.innerHTML = `
         <div class="session-meta">
           <div class="session-title-row">${tgBadge}<span class="session-title">${escapeHtml(s.title)}</span></div>
@@ -328,18 +543,93 @@
         <button class="session-del" title="${escapeHtml(t("sessions.delete_title"))}">&times;</button>
       `;
       item.querySelector(".session-meta").addEventListener("click", () => {
-        state.activeSessionId = s.id;
-        renderAll();
-        if (window.innerWidth <= 900) {
-          closeMobileOverlays();
-        }
+        openCenterTab({ key: `session:${s.id}`, kind: "session", id: s.id, title: s.title }, true);
       });
       item.querySelector(".session-del").addEventListener("click", async (e) => {
         e.stopPropagation();
         await api(`/api/sessions/${s.id}`, { method: "DELETE" });
+        closeCenterTab(`session:${s.id}`);
         await loadSessions();
       });
       els.sessionList.appendChild(item);
+    }
+  }
+
+  function renderMemorySidebar() {
+    els.memorySidebarList.innerHTML = "";
+    if (!state.appMemory || state.appMemory.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "sidebar-empty";
+      empty.textContent = t("memory.empty");
+      els.memorySidebarList.appendChild(empty);
+      return;
+    }
+    const activeTab = getActiveTab();
+    for (const pb of state.appMemory) {
+      const title = pb.app_label || pb.package_name;
+      const sub = pb.purpose || pb.package_name;
+      const isSelected = activeTab?.kind === "memory" && activeTab.id === pb.package_name;
+      const item = document.createElement("div");
+      item.className = `session-item ${isSelected ? "active" : ""}`;
+      item.innerHTML = `
+        <div class="session-meta">
+          <div class="session-title-row"><span class="session-title">${escapeHtml(title)}</span></div>
+          <div class="session-sub">${escapeHtml(sub)}</div>
+        </div>
+        <button class="session-del" title="${escapeHtml(t("memory.delete"))}">&times;</button>
+      `;
+      item.querySelector(".session-meta").addEventListener("click", () => {
+        openCenterTab(
+          { key: `memory:${pb.package_name}`, kind: "memory", id: pb.package_name, title },
+          true
+        );
+      });
+      item.querySelector(".session-del").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await api(`/api/app-memory/${encodeURIComponent(pb.package_name)}`, { method: "DELETE" });
+        closeCenterTab(`memory:${pb.package_name}`);
+        await loadAppMemory();
+      });
+      els.memorySidebarList.appendChild(item);
+    }
+  }
+
+  function renderCredentialsSidebar() {
+    els.credentialsSidebarList.innerHTML = "";
+    if (!state.credentials || state.credentials.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "sidebar-empty";
+      empty.textContent = t("credentials.empty");
+      els.credentialsSidebarList.appendChild(empty);
+      return;
+    }
+    const activeTab = getActiveTab();
+    for (const c of state.credentials) {
+      const title = c.label || c.target || c.username;
+      const sub = [c.target, c.username].filter(Boolean).join(" · ") || "••••••••";
+      const isSelected = activeTab?.kind === "credential" && activeTab.id === c.id;
+      const item = document.createElement("div");
+      item.className = `session-item ${isSelected ? "active" : ""}`;
+      item.innerHTML = `
+        <div class="session-meta">
+          <div class="session-title-row"><span class="session-title">${escapeHtml(title)}</span></div>
+          <div class="session-sub">${escapeHtml(sub)}</div>
+        </div>
+        <button class="session-del" title="${escapeHtml(t("memory.delete"))}">&times;</button>
+      `;
+      item.querySelector(".session-meta").addEventListener("click", () => {
+        openCenterTab(
+          { key: `credential:${c.id}`, kind: "credential", id: c.id, title },
+          true
+        );
+      });
+      item.querySelector(".session-del").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await api(`/api/credentials/${encodeURIComponent(c.id)}`, { method: "DELETE" });
+        closeCenterTab(`credential:${c.id}`);
+        await loadCredentials();
+      });
+      els.credentialsSidebarList.appendChild(item);
     }
   }
 
@@ -608,18 +898,20 @@
   }
 
   function renderAll() {
-    const session = getActiveSession();
-    if (session) {
-      state.activeSessionId = session.id;
-      els.sessionProvider.value = session.provider;
-      populateModels(session.provider, session.model);
-      if (!state.providerModelsCache[session.provider]) {
-        fetchModelsForProvider(session.provider);
-      }
+    // Sync open session tab titles & prune deleted sessions
+    const sessionById = new Map(state.sessions.map((s) => [s.id, s]));
+    state.openTabs = state.openTabs.filter((tb) => {
+      if (tb.kind !== "session") return true;
+      const s = sessionById.get(tb.id);
+      if (!s) return false;
+      tb.title = s.title;
+      return true;
+    });
+    if (state.activeTabKey && !state.openTabs.some((tb) => tb.key === state.activeTabKey)) {
+      state.activeTabKey = state.openTabs[0]?.key || null;
     }
-    renderSessions();
-    renderMessages();
-    updateKeyWarning();
+    ensureAtLeastOneTab();
+    renderCenterWorkspace();
   }
 
   const PROVIDER_LABELS = {
@@ -1111,7 +1403,7 @@
     pointerStart = null;
   });
 
-  // Session controls
+  // Session, Memory & Credential creation controls
   els.btnNewSession.addEventListener("click", async () => {
     const s = await api("/api/sessions", {
       method: "POST",
@@ -1119,6 +1411,24 @@
     });
     state.activeSessionId = s.id;
     await loadSessions();
+    openCenterTab({ key: `session:${s.id}`, kind: "session", id: s.id, title: s.title }, true);
+  });
+
+  els.btnNewMemory.addEventListener("click", () => {
+    openCenterTab({ key: "memory:__new__", kind: "memory", id: null, title: t("memory.new_title") }, true);
+  });
+
+  els.btnNewCredential.addEventListener("click", () => {
+    openCenterTab(
+      { key: "credential:__new__", kind: "credential", id: null, title: t("credentials.new_title") },
+      true
+    );
+  });
+
+  els.btnToggleCredPw.addEventListener("click", () => {
+    const showing = els.credPassword.type === "text";
+    els.credPassword.type = showing ? "password" : "text";
+    els.btnToggleCredPw.textContent = showing ? t("credentials.show") : t("credentials.hide");
   });
 
   els.sessionProvider.addEventListener("change", async () => {
@@ -1243,13 +1553,10 @@
     els.tabPanelKeys.classList.toggle("hidden", tabName !== "keys");
     els.tabPanelModels.classList.toggle("hidden", tabName !== "models");
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
-    els.tabPanelMemory.classList.toggle("hidden", tabName !== "memory");
     els.tabPanelTelegram.classList.toggle("hidden", tabName !== "telegram");
     els.tabPanelSecurity.classList.toggle("hidden", tabName !== "security");
     if (tabName === "models") {
       fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
-    } else if (tabName === "memory") {
-      loadAppMemory();
     } else if (tabName === "telegram") {
       loadConfig();
     } else if (tabName === "security") {
@@ -1342,56 +1649,29 @@
   });
 
   async function loadAppMemory() {
-    const list = await api("/api/app-memory");
-    els.appMemoryList.innerHTML = "";
-    if (!list || list.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "keys-empty";
-      empty.textContent = t("memory.empty");
-      els.appMemoryList.appendChild(empty);
-      return;
+    state.appMemory = (await api("/api/app-memory")) || [];
+    const byPkg = new Map(state.appMemory.map((p) => [p.package_name, p]));
+    for (const tb of state.openTabs) {
+      if (tb.kind === "memory" && tb.id) {
+        const pb = byPkg.get(tb.id);
+        if (pb) tb.title = pb.app_label || pb.package_name;
+      }
     }
+    renderMemorySidebar();
+    renderCenterTabs();
+  }
 
-    for (const pb of list) {
-      const card = document.createElement("div");
-      card.className = "memory-card";
-      const title = pb.app_label ? `${pb.app_label}` : pb.package_name;
-      const ver = pb.app_version ? ` · v${pb.app_version}` : "";
-      const purposeHtml = pb.purpose
-        ? `<div class="memory-purpose">${escapeHtml(t("memory.use_for", { purpose: pb.purpose }))}</div>`
-        : "";
-      const notesHtml = (pb.notes || []).length
-        ? `<ul class="memory-notes">${pb.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`
-        : "";
-      card.innerHTML = `
-        <div class="memory-card-head">
-          <div>
-            <div class="key-row-name">${escapeHtml(title)}</div>
-            <div class="memory-pkg">${escapeHtml(pb.package_name)}${escapeHtml(ver)}</div>
-          </div>
-          <div class="security-actions">
-            <button type="button" class="pill-btn btn-edit-mem">${escapeHtml(t("memory.edit"))}</button>
-            <button type="button" class="pill-btn pill-btn-danger btn-del-mem">${escapeHtml(t("memory.delete"))}</button>
-          </div>
-        </div>
-        ${purposeHtml}
-        ${notesHtml}
-      `;
-      card.querySelector(".btn-edit-mem").addEventListener("click", () => {
-        els.memPackage.value = pb.package_name;
-        els.memLabel.value = pb.app_label || "";
-        els.memPurpose.value = pb.purpose || "";
-        els.memNotes.value = (pb.notes || []).join("\n");
-        els.memPurpose.focus();
-      });
-      card.querySelector(".btn-del-mem").addEventListener("click", async () => {
-        await api(`/api/app-memory/${encodeURIComponent(pb.package_name)}`, {
-          method: "DELETE",
-        });
-        await loadAppMemory();
-      });
-      els.appMemoryList.appendChild(card);
+  async function loadCredentials() {
+    state.credentials = (await api("/api/credentials")) || [];
+    const byId = new Map(state.credentials.map((c) => [c.id, c]));
+    for (const tb of state.openTabs) {
+      if (tb.kind === "credential" && tb.id) {
+        const c = byId.get(tb.id);
+        if (c) tb.title = c.label || c.target || c.username;
+      }
     }
+    renderCredentialsSidebar();
+    renderCenterTabs();
   }
 
   els.appMemoryForm.addEventListener("submit", async (e) => {
@@ -1403,20 +1683,84 @@
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean);
+    const label = els.memLabel.value.trim();
+    const purpose = els.memPurpose.value.trim();
     await api(`/api/app-memory/${encodeURIComponent(pkg)}`, {
       method: "PUT",
-      body: JSON.stringify({
-        app_label: els.memLabel.value.trim(),
-        purpose: els.memPurpose.value.trim(),
-        notes,
-      }),
+      body: JSON.stringify({ app_label: label, purpose, notes }),
     });
-    els.memPackage.value = "";
-    els.memLabel.value = "";
-    els.memPurpose.value = "";
-    els.memNotes.value = "";
-    els.memSaveMsg.textContent = t("memory.saved");
     await loadAppMemory();
+    const curTab = getActiveTab();
+    const newKey = `memory:${pkg}`;
+    if (curTab && curTab.kind === "memory" && curTab.key !== newKey) {
+      curTab.key = newKey;
+      curTab.id = pkg;
+      curTab.title = label || pkg;
+      state.activeTabKey = newKey;
+    }
+    els.memEditorTitle.textContent = label || pkg;
+    els.btnDeleteMemory.classList.remove("hidden");
+    renderCenterTabs();
+    renderMemorySidebar();
+    els.memSaveMsg.textContent = t("memory.saved");
+  });
+
+  els.btnDeleteMemory.addEventListener("click", async () => {
+    const tab = getActiveTab();
+    const pkg = tab?.kind === "memory" && tab.id ? tab.id : els.memPackage.value.trim();
+    if (!pkg) return;
+    await api(`/api/app-memory/${encodeURIComponent(pkg)}`, { method: "DELETE" });
+    closeCenterTab(`memory:${pkg}`);
+    await loadAppMemory();
+  });
+
+  els.credentialForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.credSaveMsg.textContent = "";
+    const payload = {
+      label: els.credLabel.value.trim(),
+      target: els.credTarget.value.trim(),
+      username: els.credUsername.value.trim(),
+      password: els.credPassword.value,
+      notes: els.credNotes.value.trim(),
+    };
+    if (!payload.label && !payload.target) return;
+
+    const curTab = getActiveTab();
+    let saved;
+    if (curTab && curTab.kind === "credential" && curTab.id) {
+      saved = await api(`/api/credentials/${encodeURIComponent(curTab.id)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      saved = await api("/api/credentials", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+
+    await loadCredentials();
+    if (curTab && curTab.kind === "credential") {
+      const newKey = `credential:${saved.id}`;
+      curTab.key = newKey;
+      curTab.id = saved.id;
+      curTab.title = saved.label || saved.target || saved.username;
+      state.activeTabKey = newKey;
+    }
+    els.credEditorTitle.textContent = saved.label || saved.target || t("credentials.form_title");
+    els.btnDeleteCredential.classList.remove("hidden");
+    renderCenterTabs();
+    renderCredentialsSidebar();
+    els.credSaveMsg.textContent = t("credentials.saved");
+  });
+
+  els.btnDeleteCredential.addEventListener("click", async () => {
+    const tab = getActiveTab();
+    if (!tab || tab.kind !== "credential" || !tab.id) return;
+    await api(`/api/credentials/${encodeURIComponent(tab.id)}`, { method: "DELETE" });
+    closeCenterTab(tab.key);
+    await loadCredentials();
   });
 
   els.tabPanelTelegram.addEventListener("submit", async (e) => {
@@ -1599,9 +1943,6 @@
       renderConfiguredKeys();
       refreshStatus();
       refreshAuthStatus().catch(() => {});
-      if (!els.tabPanelMemory.classList.contains("hidden")) {
-        loadAppMemory().catch(() => {});
-      }
       if (state.config) {
         populateDefaultModels(els.cfgDefaultProvider.value, els.cfgDefaultModel.value);
       }
@@ -1615,7 +1956,7 @@
     const pData = await api("/api/providers");
     state.providers = pData.providers || [];
     await loadConfig();
-    await loadSessions();
+    await Promise.all([loadSessions(), loadAppMemory(), loadCredentials()]);
     await refreshStatus();
     statusInterval = setInterval(refreshStatus, 5000);
     connectVideoWs();

@@ -270,7 +270,7 @@ html, body {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 230px 1fr 340px;
+  grid-template-columns: 260px 1fr 340px;
   gap: 12px;
   padding: 0 14px 14px;
   min-height: 0;
@@ -291,7 +291,79 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 12px 10px;
+  padding: 10px;
+}
+
+.sidebar-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 11px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.sidebar-tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-tab-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.sidebar-tab-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.sidebar-tab-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-tab-btn.active {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.sidebar-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-empty {
+  padding: 16px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  text-align: center;
 }
 
 .sidebar-header {
@@ -405,7 +477,7 @@ html, body {
   background: rgba(248, 113, 113, 0.14);
 }
 
-/* Chat Pane */
+/* Chat Pane / Center Multi-Tab Workspace */
 .chat-pane {
   background: var(--surface);
   border-radius: 16px;
@@ -413,6 +485,141 @@ html, body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.center-tabs-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 10px 0;
+  background: rgba(11, 13, 18, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.center-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.center-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 8px;
+  margin-bottom: -1px;
+  border-radius: 9px 9px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  max-width: 210px;
+  flex-shrink: 0;
+  transition: color 0.14s, background 0.14s;
+}
+
+.center-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.center-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.center-tab-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.center-tab.active .center-tab-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.center-tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.center-tab-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.center-tab-close:hover {
+  opacity: 1;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.center-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.center-editor-view {
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+.editor-form {
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.editor-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.password-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-input-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .key-warning {
@@ -1712,6 +1919,8 @@ html, body {
     overflow: hidden;
   }
 
+  .chat-pane:not(.mobile-expanded) .center-tabs-bar,
+  .chat-pane:not(.mobile-expanded) .center-view,
   .chat-pane:not(.mobile-expanded) .chat-messages,
   .chat-pane:not(.mobile-expanded) .composer-wrap,
   .chat-pane:not(.mobile-expanded) .key-warning,

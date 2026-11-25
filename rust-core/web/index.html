@@ -65,14 +65,47 @@
           </div>
         </div>
 
-        <div class="sidebar-header">
-          <span class="section-label" data-i18n="sessions.title">Sessions</span>
-          <button class="icon-pill-btn" id="btn-new-session" title="New Session" data-i18n-title="sessions.new_title" data-i18n="sessions.new">+ New</button>
+        <div class="sidebar-tabs" role="tablist">
+          <button type="button" class="sidebar-tab-btn active" data-sidebar-tab="sessions" role="tab" aria-selected="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span data-i18n="sessions.title">Sessions</span>
+          </button>
+          <button type="button" class="sidebar-tab-btn" data-sidebar-tab="memory" role="tab" aria-selected="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <span data-i18n="settings.tab_memory">Memory</span>
+          </button>
+          <button type="button" class="sidebar-tab-btn" data-sidebar-tab="credentials" role="tab" aria-selected="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span data-i18n="credentials.tab">Credentials</span>
+          </button>
         </div>
-        <div class="session-list" id="session-list"></div>
+
+        <div class="sidebar-panel" id="sidebar-panel-sessions">
+          <div class="sidebar-header">
+            <span class="section-label" data-i18n="sessions.title">Sessions</span>
+            <button class="icon-pill-btn" id="btn-new-session" title="New Session" data-i18n-title="sessions.new_title" data-i18n="sessions.new">+ New</button>
+          </div>
+          <div class="session-list" id="session-list"></div>
+        </div>
+
+        <div class="sidebar-panel hidden" id="sidebar-panel-memory">
+          <div class="sidebar-header">
+            <span class="section-label" data-i18n="settings.tab_memory">Memory</span>
+            <button class="icon-pill-btn" id="btn-new-memory" title="New App Memory" data-i18n-title="memory.new_title" data-i18n="sessions.new">+ New</button>
+          </div>
+          <div class="session-list" id="memory-sidebar-list"></div>
+        </div>
+
+        <div class="sidebar-panel hidden" id="sidebar-panel-credentials">
+          <div class="sidebar-header">
+            <span class="section-label" data-i18n="credentials.tab">Credentials</span>
+            <button class="icon-pill-btn" id="btn-new-credential" title="New Credential" data-i18n-title="credentials.new_title" data-i18n="sessions.new">+ New</button>
+          </div>
+          <div class="session-list" id="credentials-sidebar-list"></div>
+        </div>
       </aside>
 
-      <!-- Chatbot Interface (Collapsible bottom sheet on mobile) -->
+      <!-- Center Multi-Tab Workspace (Sessions, Memory, Credentials) -->
       <section class="chat-pane" id="chat-pane">
         <button type="button" class="mobile-chat-handle mobile-only" id="mobile-chat-handle" aria-expanded="false">
           <span class="chat-handle-bar"></span>
@@ -84,35 +117,123 @@
           </span>
         </button>
 
-        <div class="key-warning hidden" id="key-warning">
-          <span data-i18n="chat.key_warning">API key not set for selected provider.</span> <button class="link-btn" id="btn-warn-settings" data-i18n="chat.configure_settings">Configure in Settings</button>
-        </div>
+        <div class="center-tabs-bar" id="center-tabs-bar" role="tablist"></div>
 
-        <div class="chat-messages" id="chat-messages"></div>
-
-        <div class="composer-wrap">
-          <div class="agent-activity hidden" id="agent-activity">
-            <div class="spinner"></div>
-            <span id="agent-activity-text" data-i18n="chat.working">Working...</span>
-            <button class="pill-btn pill-btn-danger" id="btn-stop-agent" data-i18n="chat.stop">Stop</button>
+        <!-- View 1: Chat Session -->
+        <div class="center-view" id="center-view-session">
+          <div class="key-warning hidden" id="key-warning">
+            <span data-i18n="chat.key_warning">API key not set for selected provider.</span> <button class="link-btn" id="btn-warn-settings" data-i18n="chat.configure_settings">Configure in Settings</button>
           </div>
 
-          <form class="chat-input-bar" id="chat-form">
-            <div class="composer-box">
-              <textarea id="chat-input" rows="2" placeholder="Ask Agentic Android to do something..." data-i18n-placeholder="chat.placeholder"></textarea>
-              <div class="composer-footer">
-                <div class="model-controls">
-                  <select id="session-provider" aria-label="AI Provider">
-                    <option value="claude">Claude</option>
-                    <option value="gemini">Gemini</option>
-                    <option value="grok">Grok</option>
-                    <option value="openai">OpenAI</option>
-                  </select>
-                  <select id="session-model-select" aria-label="AI Model"></select>
-                  <button type="button" class="ghost-icon-btn" id="btn-refresh-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
-                  <span class="model-source-hint" id="model-source-hint"></span>
+          <div class="chat-messages" id="chat-messages"></div>
+
+          <div class="composer-wrap">
+            <div class="agent-activity hidden" id="agent-activity">
+              <div class="spinner"></div>
+              <span id="agent-activity-text" data-i18n="chat.working">Working...</span>
+              <button class="pill-btn pill-btn-danger" id="btn-stop-agent" data-i18n="chat.stop">Stop</button>
+            </div>
+
+            <form class="chat-input-bar" id="chat-form">
+              <div class="composer-box">
+                <textarea id="chat-input" rows="2" placeholder="Ask Agentic Android to do something..." data-i18n-placeholder="chat.placeholder"></textarea>
+                <div class="composer-footer">
+                  <div class="model-controls">
+                    <select id="session-provider" aria-label="AI Provider">
+                      <option value="claude">Claude</option>
+                      <option value="gemini">Gemini</option>
+                      <option value="grok">Grok</option>
+                      <option value="openai">OpenAI</option>
+                    </select>
+                    <select id="session-model-select" aria-label="AI Model"></select>
+                    <button type="button" class="ghost-icon-btn" id="btn-refresh-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
+                    <span class="model-source-hint" id="model-source-hint"></span>
+                  </div>
+                  <button type="submit" class="send-btn" id="btn-send" data-i18n="chat.send">Send</button>
                 </div>
-                <button type="submit" class="send-btn" id="btn-send" data-i18n="chat.send">Send</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- View 2: App Memory Editor -->
+        <div class="center-view center-editor-view hidden" id="center-view-memory">
+          <form class="editor-form" id="app-memory-form">
+            <div class="editor-head">
+              <div>
+                <h2 id="mem-editor-title" data-i18n="memory.form_title">Add / Edit App Memory</h2>
+                <p class="modal-desc" data-i18n="memory.desc">Remember which app to use for what, plus per-app UI quirks. App purposes are shared on every turn; detailed UI notes are injected automatically when using that app.</p>
+              </div>
+            </div>
+            <div class="settings-row settings-row-2">
+              <div class="field">
+                <label for="mem-package" data-i18n="memory.package">Package Name</label>
+                <input type="text" id="mem-package" placeholder="e.g. de.hafas.android.db" data-i18n-placeholder="memory.package_placeholder" required />
+              </div>
+              <div class="field">
+                <label for="mem-label" data-i18n="memory.label">App Label (optional)</label>
+                <input type="text" id="mem-label" placeholder="e.g. DB Navigator" data-i18n-placeholder="memory.label_placeholder" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="mem-purpose" data-i18n="memory.purpose">Use For / Purpose</label>
+              <input type="text" id="mem-purpose" placeholder="e.g. German train connections, schedules, and tickets" data-i18n-placeholder="memory.purpose_placeholder" />
+            </div>
+            <div class="field">
+              <label for="mem-notes" data-i18n="memory.notes">UI Notes &amp; Quirks (one per line, optional)</label>
+              <textarea id="mem-notes" rows="7" placeholder="Tap 'Suche' button before typing destination&#10;Dismiss cookie banner via 'Alle akzeptieren'" data-i18n-placeholder="memory.notes_placeholder"></textarea>
+            </div>
+            <div class="editor-footer">
+              <span class="save-msg" id="mem-save-msg"></span>
+              <div class="security-actions">
+                <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-delete-memory" data-i18n="memory.delete">Delete</button>
+                <button type="submit" class="send-btn" data-i18n="memory.save">Save App Memory</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- View 3: Credential Editor -->
+        <div class="center-view center-editor-view hidden" id="center-view-credential">
+          <form class="editor-form" id="credential-form">
+            <div class="editor-head">
+              <div>
+                <h2 id="cred-editor-title" data-i18n="credentials.form_title">Add / Edit Credential</h2>
+                <p class="modal-desc" data-i18n="credentials.desc">Store app or website credentials locally on your device. Only labels and targets are listed to the agent; passwords are fetched on demand and redacted from chat logs.</p>
+              </div>
+            </div>
+            <div class="settings-row settings-row-2">
+              <div class="field">
+                <label for="cred-label" data-i18n="credentials.label">Name / Label</label>
+                <input type="text" id="cred-label" placeholder="e.g. Amazon Account" data-i18n-placeholder="credentials.label_placeholder" required />
+              </div>
+              <div class="field">
+                <label for="cred-target" data-i18n="credentials.target">App Package or Website</label>
+                <input type="text" id="cred-target" placeholder="e.g. amazon.de or com.amazon.mShop" data-i18n-placeholder="credentials.target_placeholder" />
+              </div>
+            </div>
+            <div class="settings-row settings-row-2">
+              <div class="field">
+                <label for="cred-username" data-i18n="credentials.username">Username / Email</label>
+                <input type="text" id="cred-username" placeholder="user@example.com" data-i18n-placeholder="credentials.username_placeholder" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="cred-password" data-i18n="credentials.password">Password / PIN</label>
+                <div class="password-input-row">
+                  <input type="password" id="cred-password" placeholder="••••••••" autocomplete="new-password" />
+                  <button type="button" class="pill-btn" id="btn-toggle-cred-pw" data-i18n="credentials.show">Show</button>
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label for="cred-notes" data-i18n="credentials.notes">Notes (optional)</label>
+              <textarea id="cred-notes" rows="4" placeholder="e.g. Use 'Sign in with email' tab, not passkey" data-i18n-placeholder="credentials.notes_placeholder"></textarea>
+            </div>
+            <div class="editor-footer">
+              <span class="save-msg" id="cred-save-msg"></span>
+              <div class="security-actions">
+                <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-delete-credential" data-i18n="memory.delete">Delete</button>
+                <button type="submit" class="send-btn" data-i18n="credentials.save">Save Credential</button>
               </div>
             </div>
           </form>
@@ -207,10 +328,6 @@
         <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           <span data-i18n="settings.tab_prompt">Prompt</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="memory" role="tab" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          <span data-i18n="settings.tab_memory">Memory</span>
         </button>
         <button type="button" class="tab-btn" data-tab="telegram" role="tab" aria-selected="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -333,42 +450,7 @@
         </div>
       </form>
 
-      <!-- Tab 4: App Memory (Per-App Playbooks & Purpose) -->
-      <div class="modal-body tab-panel hidden" id="tab-panel-memory">
-        <p class="modal-desc" data-i18n="memory.desc">
-          Remember which app to use for what, plus per-app UI quirks. App purposes are shared on every turn; detailed UI notes are injected automatically when using that app.
-        </p>
-
-        <div class="memory-list" id="app-memory-list"></div>
-
-        <form class="security-card" id="app-memory-form">
-          <h3 data-i18n="memory.form_title">Add / Edit App Memory</h3>
-          <div class="settings-row settings-row-2">
-            <div class="field">
-              <label for="mem-package" data-i18n="memory.package">Package Name</label>
-              <input type="text" id="mem-package" placeholder="e.g. de.hafas.android.db" data-i18n-placeholder="memory.package_placeholder" required />
-            </div>
-            <div class="field">
-              <label for="mem-label" data-i18n="memory.label">App Label (optional)</label>
-              <input type="text" id="mem-label" placeholder="e.g. DB Navigator" data-i18n-placeholder="memory.label_placeholder" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="mem-purpose" data-i18n="memory.purpose">Use For / Purpose</label>
-            <input type="text" id="mem-purpose" placeholder="e.g. German train connections, schedules, and tickets" data-i18n-placeholder="memory.purpose_placeholder" />
-          </div>
-          <div class="field">
-            <label for="mem-notes" data-i18n="memory.notes">UI Notes &amp; Quirks (one per line, optional)</label>
-            <textarea id="mem-notes" rows="4" placeholder="Tap 'Suche' button before typing destination&#10;Dismiss cookie banner via 'Alle akzeptieren'" data-i18n-placeholder="memory.notes_placeholder"></textarea>
-          </div>
-          <div class="modal-footer">
-            <span class="save-msg" id="mem-save-msg"></span>
-            <button type="submit" class="send-btn" data-i18n="memory.save">Save App Memory</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Tab 5: Telegram Bot -->
+      <!-- Tab 4: Telegram Bot -->
       <form class="modal-body tab-panel hidden" id="tab-panel-telegram">
         <div class="security-card">
           <div class="security-card-head">
