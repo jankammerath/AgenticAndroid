@@ -109,9 +109,13 @@ struct RunOpts {
     #[arg(long, env = "ABI")]
     abi: Option<String>,
 
-    /// Run the Android emulator headless (-no-window -no-audio -gpu swiftshader_indirect)
+    /// Run the Android emulator headless (-no-window -no-audio -gpu swiftshader_indirect -feature -Vulkan)
     #[arg(long, env = "HEADLESS")]
     headless: bool,
+
+    /// Override Android emulator GPU mode (e.g. swiftshader_indirect, guest, host, auto)
+    #[arg(long, env = "EMU_GPU")]
+    gpu: Option<String>,
 
     /// Build from source only without launching an emulator
     #[arg(long)]
@@ -157,6 +161,7 @@ struct FileConfig {
     port: Option<u16>,
     abi: Option<String>,
     headless: Option<bool>,
+    gpu: Option<String>,
     project_root: Option<PathBuf>,
     state_dir: Option<PathBuf>,
     android_home: Option<PathBuf>,
@@ -174,6 +179,7 @@ struct EffectiveConfig {
     port: u16,
     abi: String,
     headless: bool,
+    gpu: Option<String>,
     build_only: bool,
     supervise: bool,
     project_root: PathBuf,
@@ -370,6 +376,7 @@ fn load_config(opts: &RunOpts) -> Result<EffectiveConfig, String> {
             .or(file_cfg.abi)
             .unwrap_or_else(|| default_abi.to_string()),
         headless: opts.headless || file_cfg.headless.unwrap_or(false),
+        gpu: opts.gpu.clone().or(file_cfg.gpu),
         build_only: opts.build_only,
         supervise: opts.supervise,
         project_root: detect_project_root(opts.project_root.clone().or(file_cfg.project_root)),
@@ -807,12 +814,25 @@ fn spawn_emulator(cfg: &EffectiveConfig, avd_name: &str) -> Result<Child, String
     ];
 
     if cfg.headless {
+        let gpu_mode = cfg
+            .gpu
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("swiftshader_indirect");
         args.extend([
             "-no-window".to_string(),
             "-no-audio".to_string(),
             "-gpu".to_string(),
-            "swiftshader_indirect".to_string(),
+            gpu_mode.to_string(),
         ]);
+        // Disable emulated Vulkan on software GPUs to prevent headless SwiftShader JIT SIGSEGVs
+        if gpu_mode == "swiftshader_indirect" || gpu_mode == "swiftshader" || gpu_mode == "guest" {
+            args.extend(["-feature".to_string(), "-Vulkan".to_string()]);
+        }
+    } else if let Some(ref gpu_mode) = cfg.gpu {
+        if !gpu_mode.trim().is_empty() {
+            args.extend(["-gpu".to_string(), gpu_mode.clone()]);
+        }
     }
 
     println!(
@@ -1496,6 +1516,9 @@ fn cmd_daemon_start(opts: RunOpts) -> Result<(), String> {
     }
     if opts.headless {
         args.push("--headless".into());
+    }
+    if let Some(ref gpu) = opts.gpu {
+        args.extend(["--gpu".into(), gpu.clone()]);
     }
     if let Some(ref c) = opts.config {
         args.extend(["--config".into(), c.display().to_string()]);

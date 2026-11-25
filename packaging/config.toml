@@ -13,6 +13,10 @@ port = 8080
 # Run the Android emulator without a display window
 headless = true
 
+# Optional emulator GPU mode (default: "swiftshader_indirect" with Vulkan disabled for stability;
+# use "guest" for pure CPU rendering if SwiftShader ever crashes)
+# gpu = "swiftshader_indirect"
+
 # Android SDK root containing platform-tools, emulator, cmdline-tools, and system-images
 android_home = "/opt/android-sdk"
 
