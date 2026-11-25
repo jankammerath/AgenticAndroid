@@ -1692,8 +1692,10 @@
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/device/install-apk");
     xhr.withCredentials = true;
+    const safeHeaderName =
+      selectedApkFile.name.replace(/[^A-Za-z0-9._-]/g, "_") || "sideload.apk";
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
-    xhr.setRequestHeader("X-Filename", selectedApkFile.name);
+    xhr.setRequestHeader("X-Filename", safeHeaderName);
 
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable) {
