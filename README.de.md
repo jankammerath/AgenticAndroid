@@ -89,7 +89,7 @@ adb forward tcp:8080 tcp:8080
 Führe `install.sh` auf einem beliebigen Linux-Server mit `x86_64` oder `arm64` aus (z. B. einer AWS-EC2-Instanz `c8i.xlarge` mit aktivierter verschachtelter Virtualisierung):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | sudo bash
+curl -fsSL -H 'Cache-Control: no-cache, no-store' "https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh?$(date +%s)" | sudo bash
 ```
 
 Das Installationsskript ist **zero-conf** und idempotent (erneutes Ausführen aktualisiert auf das neueste Release, ohne Zugangsdaten oder Konfiguration zu überschreiben):

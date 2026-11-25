@@ -89,7 +89,7 @@ Then open `http://localhost:8080` in your computer's browser.
 Run `install.sh` on any Linux `x86_64` or `arm64` server (e.g., an AWS EC2 `c8i.xlarge` with nested virtualization enabled):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | sudo bash
+curl -fsSL -H 'Cache-Control: no-cache, no-store' "https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh?$(date +%s)" | sudo bash
 ```
 
 The installer is **zero-conf** and idempotent (re-running it upgrades to the latest release without overwriting your credentials or config):

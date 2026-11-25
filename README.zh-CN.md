@@ -89,7 +89,7 @@ adb forward tcp:8080 tcp:8080
 在任意 Linux `x86_64` 或 `arm64` 服务器上运行 `install.sh`（例如开启嵌套虚拟化的 AWS EC2 `c8i.xlarge`）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | sudo bash
+curl -fsSL -H 'Cache-Control: no-cache, no-store' "https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh?$(date +%s)" | sudo bash
 ```
 
 该安装脚本**零配置且幂等**（重复运行可平滑升级到最新版本，不会覆盖你的凭据或配置）：
