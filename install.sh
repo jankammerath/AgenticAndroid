@@ -144,22 +144,40 @@ yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
 
 echo "==> [3/6] Downloading & installing/upgrading latest Agentic Android package..."
 # Snapshot live state from currently running server before upgrading
+BACKUP_FILE="$STATE_DIR/state_backup/backup.json"
 if [ -f "$STATE_DIR/backup.key" ]; then
   mkdir -p "$STATE_DIR/state_backup"
   BACKUP_KEY="$(tr -d '\r\n' < "$STATE_DIR/backup.key")"
   if [ -n "$BACKUP_KEY" ]; then
-    curl -fsS --max-time 5 -H "X-Backup-Secret: $BACKUP_KEY" \
+    TMP_BACKUP="$STATE_DIR/state_backup/backup.json.tmp"
+    if curl -fsS --max-time 8 -H "X-Backup-Secret: $BACKUP_KEY" \
       "http://127.0.0.1:${PORT}/api/internal/backup" \
-      -o "$STATE_DIR/state_backup/backup.json.tmp" 2>/dev/null && \
-      mv "$STATE_DIR/state_backup/backup.json.tmp" "$STATE_DIR/state_backup/backup.json" && \
-      chmod 600 "$STATE_DIR/state_backup/backup.json" || rm -f "$STATE_DIR/state_backup/backup.json.tmp"
+      -o "$TMP_BACKUP" 2>/dev/null && [ -s "$TMP_BACKUP" ]; then
+      # Only overwrite an existing backup if the live server actually has user data
+      HAS_DATA=0
+      if grep -qE '"enabled":true|"(claude|gemini|grok|openai|bot_token|totp_secret)":"[^"]+"|"messages":\[\{' "$TMP_BACKUP"; then
+        HAS_DATA=1
+      fi
+      if [ "$HAS_DATA" -eq 1 ] || [ ! -s "$BACKUP_FILE" ]; then
+        [ -s "$BACKUP_FILE" ] && cp -f "$BACKUP_FILE" "$STATE_DIR/state_backup/backup.prev.json" && chmod 600 "$STATE_DIR/state_backup/backup.prev.json"
+        mv "$TMP_BACKUP" "$BACKUP_FILE"
+        chmod 600 "$BACKUP_FILE"
+        echo "    Backed up live state to $BACKUP_FILE"
+      else
+        rm -f "$TMP_BACKUP"
+        echo "    Live server has empty state; keeping existing backup at $BACKUP_FILE"
+      fi
+    else
+      rm -f "$TMP_BACKUP"
+    fi
   fi
 fi
 TMP_PKG_DIR="$(mktemp -d)"
 if [ "$PKG_MGR" = "apt" ]; then
   PKG_FILE="$TMP_PKG_DIR/agentic-android.deb"
   curl -fsSL "https://github.com/${REPO}/releases/latest/download/agentic-android.deb" -o "$PKG_FILE"
-  apt-get install -y "$PKG_FILE"
+  # Prevent needrestart from prematurely restarting agentic-android.service mid-upgrade
+  NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y "$PKG_FILE"
 else
   PKG_FILE="$TMP_PKG_DIR/agentic-android.rpm"
   curl -fsSL "https://github.com/${REPO}/releases/latest/download/agentic-android.rpm" -o "$PKG_FILE"
@@ -200,6 +218,28 @@ for _ in $(seq 1 90); do
   fi
   sleep 2
 done
+
+# Deterministically restore host state backup BEFORE checking/seeding default login
+if [ "$SERVER_READY" -eq 1 ] && [ -s "$BACKUP_FILE" ] && [ -f "$STATE_DIR/backup.key" ]; then
+  BACKUP_KEY="$(tr -d '\r\n' < "$STATE_DIR/backup.key")"
+  if [ -n "$BACKUP_KEY" ]; then
+    for _ in $(seq 1 5); do
+      RESTORE_RESP="$(curl -fsS --max-time 10 -X POST \
+        -H "Content-Type: application/json" \
+        -H "X-Backup-Secret: $BACKUP_KEY" \
+        --data-binary "@${BACKUP_FILE}" \
+        "http://127.0.0.1:${PORT}/api/internal/backup" 2>/dev/null || true)"
+      if echo "$RESTORE_RESP" | grep -q '"restored":true'; then
+        echo "    Restored Agentic Android state from host backup ($BACKUP_FILE)."
+        break
+      elif echo "$RESTORE_RESP" | grep -q '"already_configured"'; then
+        echo "    Existing in-app state already present; no restore needed."
+        break
+      fi
+      sleep 1
+    done
+  fi
+fi
 
 echo "==> [5/6] Configuring default login credentials (no MFA)..."
 CREATED_DEFAULT_LOGIN=0

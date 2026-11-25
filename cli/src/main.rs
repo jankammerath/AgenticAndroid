@@ -917,6 +917,24 @@ fn ensure_backup_secret(state_dir: &Path) -> String {
     hex
 }
 
+fn backup_has_user_data(json: &str) -> bool {
+    if json.contains("\"enabled\":true") || json.contains("\"messages\":[{") {
+        return true;
+    }
+    for key in ["claude", "gemini", "grok", "openai", "bot_token", "totp_secret"] {
+        let needle = format!("\"{key}\":\"");
+        if let Some(pos) = json.find(&needle) {
+            let rest = &json[pos + needle.len()..];
+            if let Some(first) = rest.chars().next() {
+                if first != '"' {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn pull_app_state_backup(cfg: &EffectiveConfig) {
     let host_dir = cfg.state_dir.join("state_backup");
     if fs::create_dir_all(&host_dir).is_err() {
@@ -926,6 +944,7 @@ fn pull_app_state_backup(cfg: &EffectiveConfig) {
     let url = format!("http://127.0.0.1:{}/api/internal/backup", cfg.port);
     let tmp_path = host_dir.join("backup.json.tmp");
     let dst_path = host_dir.join("backup.json");
+    let prev_path = host_dir.join("backup.prev.json");
 
     if let Ok(out) = Command::new("curl")
         .args([
@@ -941,8 +960,25 @@ fn pull_app_state_backup(cfg: &EffectiveConfig) {
         .output()
     {
         if out.status.success() {
-            if let Ok(meta) = fs::metadata(&tmp_path) {
-                if meta.len() > 20 {
+            if let Ok(new_content) = fs::read_to_string(&tmp_path) {
+                if new_content.len() > 20 {
+                    // Never clobber a populated backup with an empty/freshly-wiped state
+                    let existing_has_data = fs::read_to_string(&dst_path)
+                        .map(|s| backup_has_user_data(&s))
+                        .unwrap_or(false);
+                    let new_has_data = backup_has_user_data(&new_content);
+                    if existing_has_data && !new_has_data {
+                        let _ = fs::remove_file(&tmp_path);
+                        return;
+                    }
+                    if existing_has_data {
+                        let _ = fs::copy(&dst_path, &prev_path);
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt;
+                            let _ = fs::set_permissions(&prev_path, fs::Permissions::from_mode(0o600));
+                        }
+                    }
                     let _ = fs::rename(&tmp_path, &dst_path);
                     #[cfg(unix)]
                     {
@@ -964,32 +1000,43 @@ fn restore_app_state_backup(cfg: &EffectiveConfig) {
     }
     let secret = ensure_backup_secret(&cfg.state_dir);
     let url = format!("http://127.0.0.1:{}/api/internal/backup", cfg.port);
-    if let Ok(out) = Command::new("curl")
-        .args([
-            "-fsS",
-            "--max-time",
-            "10",
-            "-X",
-            "POST",
-            "-H",
-            "Content-Type: application/json",
-            "-H",
-            &format!("X-Backup-Secret: {secret}"),
-            "--data-binary",
-        ])
-        .arg(format!("@{}", src_path.display()))
-        .arg(&url)
-        .output()
-    {
-        if out.status.success() {
-            let body = String::from_utf8_lossy(&out.stdout);
-            if body.contains("\"restored\":true") {
-                println!(
-                    "    Restored Agentic Android state from host backup ({}).",
-                    src_path.display()
+    for attempt in 1..=5 {
+        if let Ok(out) = Command::new("curl")
+            .args([
+                "-fsS",
+                "--max-time",
+                "10",
+                "-X",
+                "POST",
+                "-H",
+                "Content-Type: application/json",
+                "-H",
+                &format!("X-Backup-Secret: {secret}"),
+                "--data-binary",
+            ])
+            .arg(format!("@{}", src_path.display()))
+            .arg(&url)
+            .output()
+        {
+            if out.status.success() {
+                let body = String::from_utf8_lossy(&out.stdout);
+                if body.contains("\"restored\":true") {
+                    println!(
+                        "    Restored Agentic Android state from host backup ({}).",
+                        src_path.display()
+                    );
+                }
+                return;
+            } else if attempt == 5 {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                eprintln!(
+                    "    WARNING: Failed to restore host backup ({}): {}",
+                    src_path.display(),
+                    stderr.trim()
                 );
             }
         }
+        thread::sleep(Duration::from_secs(1));
     }
 }
 
@@ -1361,6 +1408,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
             eprintln!("Health check failed on port {}; recovering...", cfg.port);
             let _ = ensure_accessibility_enabled(&cfg.android_home);
             let _ = ensure_port_forwarded(&cfg.android_home, cfg.port);
+            let backup_secret = ensure_backup_secret(&cfg.state_dir);
             let _ = Command::new(adb_bin(&cfg.android_home))
                 .args([
                     "shell",
@@ -1374,6 +1422,9 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                     "--ei",
                     "port",
                     &cfg.port.to_string(),
+                    "--es",
+                    "backup_secret",
+                    &backup_secret,
                 ])
                 .status();
         }

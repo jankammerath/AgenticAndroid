@@ -579,7 +579,8 @@ async fn api_internal_restore(
             || !cur.api_keys.claude.is_empty()
             || !cur.api_keys.gemini.is_empty()
             || !cur.api_keys.grok.is_empty()
-            || !cur.api_keys.openai.is_empty();
+            || !cur.api_keys.openai.is_empty()
+            || !cur.telegram.bot_token.is_empty();
         if already_configured {
             return Json(json!({ "ok": true, "restored": false, "reason": "already_configured" }))
                 .into_response();
