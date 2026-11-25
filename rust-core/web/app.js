@@ -2132,6 +2132,21 @@
         els.emuAvdSelect.appendChild(opt);
       }
 
+      const prevDev = els.emuNewDevice.value;
+      if (Array.isArray(data.available_devices) && data.available_devices.length > 0) {
+        els.emuNewDevice.innerHTML = "";
+        for (const dev of data.available_devices) {
+          const opt = document.createElement("option");
+          opt.value = dev;
+          opt.textContent = dev
+            .split("_")
+            .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+            .join(" ");
+          if (dev === (prevDev || "pixel_6")) opt.selected = true;
+          els.emuNewDevice.appendChild(opt);
+        }
+      }
+
       const prevImg = els.emuNewImage.value;
       const installedSet = new Set(data.installed_images || []);
       const allImgs = Array.from(

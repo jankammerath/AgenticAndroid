@@ -1374,6 +1374,39 @@ fn sdkmanager_bin(android_home: &Path) -> PathBuf {
     android_home.join("cmdline-tools/bin/sdkmanager")
 }
 
+fn list_avd_devices(android_home: &Path) -> Vec<String> {
+    let Ok(out) = Command::new(avdmanager_bin(android_home))
+        .args(["list", "device", "-c"])
+        .env("ANDROID_HOME", android_home)
+        .env("ANDROID_SDK_ROOT", android_home)
+        .output()
+    else {
+        return vec!["pixel_6".into(), "pixel_7".into()];
+    };
+    if !out.status.success() {
+        return vec!["pixel_6".into(), "pixel_7".into()];
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut devices: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| {
+            !l.is_empty()
+                && (l.starts_with("pixel_")
+                    || *l == "pixel"
+                    || *l == "medium_phone"
+                    || *l == "small_phone")
+        })
+        .map(ToString::to_string)
+        .collect();
+    devices.reverse(); // newest Pixel profiles first
+    if devices.is_empty() {
+        vec!["pixel_6".into(), "pixel_7".into()]
+    } else {
+        devices
+    }
+}
+
 fn update_config_file_avd(cfg_path: &Option<PathBuf>, new_avd: &str) {
     let Some(path) = cfg_path else {
         return;
@@ -1475,6 +1508,7 @@ fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
         ("GET", "/emulator-config") | ("GET", "/emulator-config/status") => {
             let avds = list_avds(&ctrl.cfg.android_home).unwrap_or_default();
             let installed = list_installed_system_images(&ctrl.cfg.android_home, &ctrl.cfg.abi);
+            let devices = list_avd_devices(&ctrl.cfg.android_home);
             let abi = &ctrl.cfg.abi;
             let available = vec![
                 format!("system-images;android-35;google_apis;{abi}"),
@@ -1500,6 +1534,7 @@ fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
                     "avds": avds,
                     "installed_images": installed,
                     "available_images": available,
+                    "available_devices": devices,
                     "abi": abi,
                     "gpu": gpu,
                     "headless": ctrl.cfg.headless,
@@ -1616,8 +1651,8 @@ fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
                 }
 
                 *ctrl_bg.task_status.lock().unwrap() = format!("Creating AVD '{name_bg}'...");
-                let mut child = match Command::new(avdmanager_bin(&ctrl_bg.cfg.android_home))
-                    .args([
+                let run_avd_create = |dev_opt: Option<&str>| -> Result<bool, String> {
+                    let mut args = vec![
                         "create",
                         "avd",
                         "--force",
@@ -1625,27 +1660,39 @@ fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
                         &name_bg,
                         "--package",
                         &system_image,
-                        "--device",
-                        &device,
-                    ])
-                    .env("ANDROID_HOME", &ctrl_bg.cfg.android_home)
-                    .env("ANDROID_SDK_ROOT", &ctrl_bg.cfg.android_home)
-                    .stdin(Stdio::piped())
-                    .spawn()
-                {
-                    Ok(c) => c,
+                    ];
+                    if let Some(d) = dev_opt {
+                        args.push("--device");
+                        args.push(d);
+                    }
+                    let mut child = Command::new(avdmanager_bin(&ctrl_bg.cfg.android_home))
+                        .args(&args)
+                        .env("ANDROID_HOME", &ctrl_bg.cfg.android_home)
+                        .env("ANDROID_SDK_ROOT", &ctrl_bg.cfg.android_home)
+                        .stdin(Stdio::piped())
+                        .spawn()
+                        .map_err(|e| format!("Failed to launch avdmanager: {e}"))?;
+                    if let Some(ref mut stdin) = child.stdin {
+                        let _ = stdin.write_all(b"no\n");
+                    }
+                    Ok(child.wait().map(|s| s.success()).unwrap_or(false))
+                };
+
+                let created = match run_avd_create(Some(&device)) {
+                    Ok(true) => true,
+                    Ok(false) => {
+                        // Fallback to pixel_6, then default device if requested profile isn't in avdmanager
+                        run_avd_create(Some("pixel_6"))
+                            .unwrap_or(false)
+                            || run_avd_create(None).unwrap_or(false)
+                    }
                     Err(e) => {
-                        *ctrl_bg.task_status.lock().unwrap() =
-                            format!("Failed to launch avdmanager: {e}");
+                        *ctrl_bg.task_status.lock().unwrap() = e;
                         ctrl_bg.busy.store(false, Ordering::SeqCst);
                         return;
                     }
                 };
-                if let Some(ref mut stdin) = child.stdin {
-                    let _ = stdin.write_all(b"no\n");
-                }
-                let ok = child.wait().map(|s| s.success()).unwrap_or(false);
-                if !ok {
+                if !created {
                     *ctrl_bg.task_status.lock().unwrap() =
                         format!("Failed to create AVD '{name_bg}'.");
                     ctrl_bg.busy.store(false, Ordering::SeqCst);
