@@ -261,9 +261,21 @@ android_home = "/opt/android-sdk"
 latitude = 50.7374
 longitude = 7.0982
 # altitude = 60.0
+# frida = true                      # 默认启动 frida-server 及已配置的脚本
+# frida_bin = "/usr/local/bin/frida" # 宿主机 frida CLI（默认从 PATH 自动检测）
+# frida_server = "/opt/frida/frida-server-android-x86_64"  # 可选；未设置时自动下载
 ```
 
 运行后在浏览器中打开 **http://localhost:8080**。
+
+### Frida 插桩调试（模拟器）
+
+在通过守护进程（`run` / `daemon` / `systemd`）运行时，可在 Web 界面中打开 **设置 → 模拟器 → Frida 插桩**：
+
+- **开启 / 关闭 Frida。** 启用后，守护进程会将模拟器切换为 root 模式（`adb root`，失败时回退到 `su`），自动下载与宿主机 `frida --version` 及模拟器 ABI 匹配的 `frida-server`（缓存于 `<state_dir>/frida/server/`），推送到 `/data/local/tmp/frida-server` 并启动。关闭后会停止所有脚本及 `frida-server`。
+- **管理要加载的脚本。** 每个脚本可配置目标应用包名、模式（通过 `frida -N` *附加*到运行中的应用，或通过 `frida -f` 带脚本*启动*应用）、启用开关以及 JavaScript 源码（可直接粘贴或导入 `.js` 文件），并支持在界面中按脚本查看日志。
+
+配置会持久化保存在 `<state_dir>/frida/settings.json`，每次模拟器启动或重启后都会自动重新应用；附加模式的脚本会在目标应用重启后自动重新附加。环境要求：宿主机安装 `pip install frida-tools`，具备 `curl` + `xz` 用于自动下载，以及可 root 的系统镜像（`google_apis` / `default`，而非 `google_apis_playstore`）。配置文件中的 `frida` 项或 `--frida` 参数仅作为初始默认值；在 Web 界面保存后，以界面设置为准。
 
 ## 发布新版本
 

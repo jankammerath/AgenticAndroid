@@ -261,9 +261,21 @@ android_home = "/opt/android-sdk"
 latitude = 50.7374
 longitude = 7.0982
 # altitude = 60.0
+# frida = true                      # frida-server + konfigurierte Skripte standardmäßig starten
+# frida_bin = "/usr/local/bin/frida" # Host-frida-CLI (Standard: automatisch über PATH erkennen)
+# frida_server = "/opt/frida/frida-server-android-x86_64"  # optional; sonst automatischer Download
 ```
 
 Sobald der Dienst läuft, öffne **http://localhost:8080** im Browser.
+
+### Frida-Instrumentierung (Emulator)
+
+Wenn der Dienst über den Supervisor (`run` / `daemon` / `systemd`) läuft, öffne **Einstellungen → Emulator → Frida-Instrumentierung** in der Web-UI, um:
+
+- **Frida ein-/auszuschalten.** Bei Aktivierung schaltet der Supervisor den Emulator in den Root-Modus (`adb root`, mit Fallback auf `su`), lädt das zur Host-Version (`frida --version`) und Emulator-ABI passende `frida-server`-Binary herunter (zwischengespeichert in `<state_dir>/frida/server/`), überträgt es nach `/data/local/tmp/frida-server` und startet es. Beim Deaktivieren werden alle Skripte sowie `frida-server` gestoppt.
+- **Skripte festzulegen.** Jedes Skript besitzt ein Ziel-App-Paket, einen Modus (*Anhängen* an die laufende App via `frida -N` oder *Starten* der App mit dem Skript via `frida -f`), einen Ein-/Aus-Schalter sowie den JavaScript-Quelltext (einfügen oder `.js`-Datei importieren). Die Logs lassen sich pro Skript direkt in der Web-UI einsehen.
+
+Die Einstellungen werden in `<state_dir>/frida/settings.json` gespeichert und nach jedem Emulator-(Neu-)Start automatisch erneut angewendet; Skripte im Attach-Modus verbinden sich automatisch neu, wenn die Ziel-App neu startet. Voraussetzungen: `pip install frida-tools` auf dem Host, `curl` + `xz` für den automatischen Download sowie ein rootbares System-Image (`google_apis` / `default`, nicht `google_apis_playstore`). Der Konfigurationsschlüssel `frida` bzw. das Flag `--frida` legt nur den Anfangswert fest – sobald die Einstellung in der Web-UI gespeichert wurde, hat diese Vorrang.
 
 ## Neue Version veröffentlichen
 
