@@ -48,8 +48,6 @@ Agentic Android is an app built in **Rust** with a minimal **Kotlin** app fronte
 - **App UI (`app`)**: Minimal Kotlin/Android frontend whose only role is configuring and starting/stopping the background webserver foreground service, enabling Accessibility Services, and optionally starting high-FPS MediaProjection screen & audio capture.
 - **Web UI**: Remote control dashboard combining a multi-session chatbot (with live model discovery for **Claude**, **Gemini**, **Grok**, and **OpenAI**) alongside a live interactive stream of the device screen and audio.
 
----
-
 ## How to Sideload the APK
 
 ### Option 1: Install directly on your Android phone
@@ -82,8 +80,6 @@ adb forward tcp:8080 tcp:8080
 
 Then open `http://localhost:8080` in your computer's browser.
 
----
-
 ## Linux Server Installation (Zero-Conf Installer & Upgrader)
 
 ### One-Command Install or Upgrade (Debian/Ubuntu & Fedora/RHEL)
@@ -107,8 +103,6 @@ For non-interactive installs, you can pass environment variables:
 curl -fsSL https://raw.githubusercontent.com/jankammerath/AgenticAndroid/main/install.sh | \
   sudo PORT=8080 HOSTNAME_DOMAIN=android.example.com LETSENCRYPT_EMAIL=you@example.com bash
 ```
-
----
 
 ### Manual DEB / RPM Installation & Dependencies
 
@@ -193,8 +187,6 @@ sudo dnf install -y ./agentic-android.rpm
    ```
 4. Open `http://<server-ip>:8080` (or `http://localhost:8080`), add your AI provider keys in **Settings**, and consider enabling **Settings → Security** (username/password + 2FA) if exposed on a network.
 
----
-
 ## Telegram Bot Remote Control
 
 Agentic Android includes a built-in Telegram bot (powered by Rust long-polling — no port forwarding or webhooks required) so you can control your Android device from anywhere over Wi-Fi or cellular.
@@ -215,8 +207,6 @@ Agentic Android includes a built-in Telegram bot (powered by Rust long-polling �
 | `/screenshot` | Capture and send the current Android screen as a photo |
 | `/new` | Start a fresh agent session for this Telegram chat |
 | `/stop` | Stop the currently running agent task |
-
----
 
 ## Development & Running in the Android Emulator
 
