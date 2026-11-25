@@ -105,6 +105,8 @@
         </div>
       </aside>
 
+      <div class="sidebar-resizer desktop-only" id="sidebar-resizer" role="separator" aria-orientation="vertical" title="Drag to resize sidebar"></div>
+
       <!-- Center Multi-Tab Workspace (Sessions, Memory, Credentials) -->
       <section class="chat-pane" id="chat-pane">
         <button type="button" class="mobile-chat-handle mobile-only" id="mobile-chat-handle" aria-expanded="false">
@@ -486,7 +488,10 @@
       <!-- Live Device Screen & Controls -->
       <section class="device-pane">
         <div class="device-header">
-          <span class="section-label" data-i18n="device.live_screen">Live Screen</span>
+          <div class="device-tab active" role="tab" aria-selected="true">
+            <svg class="center-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <span class="center-tab-title" data-i18n="device.live_screen">Live Screen</span>
+          </div>
           <div class="device-header-right">
             <span class="device-dims" id="device-dims">-- &times; --</span>
             <button class="ghost-icon-btn" id="btn-refresh-frame" title="Refresh frame" data-i18n-title="device.refresh_frame">&#8635;</button>
@@ -494,51 +499,53 @@
           </div>
         </div>
 
-        <div class="screen-stage" id="screen-stage">
-          <div class="phone-frame">
-            <img id="screen-img" alt="Live Android screen" draggable="false" />
-            <div class="screen-placeholder" id="screen-placeholder">
-              <p data-i18n="device.waiting_stream">Waiting for stream...</p>
-              <small data-i18n="device.waiting_hint">Click or drag once connected</small>
+        <div class="device-body">
+          <div class="screen-stage" id="screen-stage">
+            <div class="phone-frame">
+              <img id="screen-img" alt="Live Android screen" draggable="false" />
+              <div class="screen-placeholder" id="screen-placeholder">
+                <p data-i18n="device.waiting_stream">Waiting for stream...</p>
+                <small data-i18n="device.waiting_hint">Click or drag once connected</small>
+              </div>
+              <div class="touch-ripple hidden" id="touch-ripple"></div>
             </div>
-            <div class="touch-ripple hidden" id="touch-ripple"></div>
           </div>
-        </div>
 
-        <div class="device-controls" id="device-controls">
-          <div class="device-controls-mobile-head mobile-only">
-            <span class="section-label" data-i18n="device.controls">Device Controls</span>
-            <div class="device-header-right">
-              <button type="button" class="ghost-icon-btn" id="mobile-btn-refresh-frame" title="Refresh frame" data-i18n-title="device.refresh_frame">&#8635;</button>
-              <button type="button" class="ghost-icon-btn" id="mobile-btn-inspect-ui" title="Inspect UI Tree" data-i18n-title="device.inspect_ui">{ }</button>
-              <button type="button" class="ghost-icon-btn" id="btn-close-mobile-actions">&times;</button>
+          <div class="device-controls" id="device-controls">
+            <div class="device-controls-mobile-head mobile-only">
+              <span class="section-label" data-i18n="device.controls">Device Controls</span>
+              <div class="device-header-right">
+                <button type="button" class="ghost-icon-btn" id="mobile-btn-refresh-frame" title="Refresh frame" data-i18n-title="device.refresh_frame">&#8635;</button>
+                <button type="button" class="ghost-icon-btn" id="mobile-btn-inspect-ui" title="Inspect UI Tree" data-i18n-title="device.inspect_ui">{ }</button>
+                <button type="button" class="ghost-icon-btn" id="btn-close-mobile-actions">&times;</button>
+              </div>
             </div>
+            <div class="nav-pill-row">
+              <button class="nav-pill" data-global="back" title="Back" data-i18n-title="device.back">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                <span data-i18n="device.back">Back</span>
+              </button>
+              <button class="nav-pill" data-global="home" title="Home" data-i18n-title="device.home">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
+                <span data-i18n="device.home">Home</span>
+              </button>
+              <button class="nav-pill" data-global="recents" title="Recents" data-i18n-title="device.recents">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>
+                <span data-i18n="device.recents">Recents</span>
+              </button>
+              <button class="nav-pill" data-global="notifications" title="Notifications" data-i18n-title="device.notifications_title">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span data-i18n="device.notifs">Notifs</span>
+              </button>
+            </div>
+            <form class="quick-type-row" id="quick-type-form">
+              <input type="text" id="quick-type-input" placeholder="Type into focused field..." data-i18n-placeholder="device.quick_type_placeholder" />
+              <button type="submit" class="nav-pill nav-pill-type" title="Type text" data-i18n-title="device.type_title">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>
+                <span data-i18n="device.type">Type</span>
+              </button>
+            </form>
           </div>
-          <div class="nav-pill-row">
-            <button class="nav-pill" data-global="back" title="Back" data-i18n-title="device.back">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
-              <span data-i18n="device.back">Back</span>
-            </button>
-            <button class="nav-pill" data-global="home" title="Home" data-i18n-title="device.home">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
-              <span data-i18n="device.home">Home</span>
-            </button>
-            <button class="nav-pill" data-global="recents" title="Recents" data-i18n-title="device.recents">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/></svg>
-              <span data-i18n="device.recents">Recents</span>
-            </button>
-            <button class="nav-pill" data-global="notifications" title="Notifications" data-i18n-title="device.notifications_title">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <span data-i18n="device.notifs">Notifs</span>
-            </button>
-          </div>
-          <form class="quick-type-row" id="quick-type-form">
-            <input type="text" id="quick-type-input" placeholder="Type into focused field..." data-i18n-placeholder="device.quick_type_placeholder" />
-            <button type="submit" class="nav-pill nav-pill-type" title="Type text" data-i18n-title="device.type_title">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>
-              <span data-i18n="device.type">Type</span>
-            </button>
-          </form>
         </div>
       </section>
     </main>

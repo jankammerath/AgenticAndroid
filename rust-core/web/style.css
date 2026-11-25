@@ -11,6 +11,8 @@
   --red: #f87171;
   --amber: #fbbf24;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --tabbar-height: 40px;
+  --sidebar-width: 280px;
 }
 
 * {
@@ -270,10 +272,39 @@ html, body {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 260px 1fr 340px;
-  gap: 12px;
+  grid-template-columns: var(--sidebar-width) 12px minmax(0, 1fr) 340px;
+  column-gap: 0;
   padding: 0 14px 14px;
   min-height: 0;
+}
+
+.workspace > .chat-pane {
+  margin-right: 12px;
+}
+
+.sidebar-resizer {
+  position: relative;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer.dragging::after {
+  background: rgba(79, 124, 255, 0.55);
 }
 
 .section-label {
@@ -291,6 +322,7 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   padding: 0;
   overflow: hidden;
 }
@@ -299,9 +331,11 @@ html, body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2px;
+  height: var(--tabbar-height);
   background: #0d1017;
-  padding: 7px 10px 0;
+  padding: 6px 10px 0;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  align-items: stretch;
   flex-shrink: 0;
 }
 
@@ -312,15 +346,15 @@ html, body {
   background: transparent;
   color: var(--muted);
   border-radius: 10px 10px 0 0;
-  padding: 7px 4px 8px;
-  font-size: 11.5px;
+  padding: 0 7px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 5px;
   min-width: 0;
   transition: background 0.15s, color 0.15s;
 }
@@ -525,9 +559,10 @@ html, body {
 
 .center-tabs-bar {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
-  padding: 7px 14px 0;
+  height: var(--tabbar-height);
+  padding: 6px 14px 0;
   background: #0d1017;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
   overflow-x: auto;
@@ -544,7 +579,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 9px;
+  padding: 0 11px;
   border-radius: 10px 10px 0 0;
   border: 1px solid transparent;
   border-bottom: none;
@@ -1128,21 +1163,85 @@ html, body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 12px;
-  gap: 10px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .device-header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  padding: 0 4px;
+  gap: 8px;
+  height: var(--tabbar-height);
+  padding: 6px 12px 0 14px;
+  background: #0d1017;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.device-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 10px 10px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  z-index: 2;
+  box-shadow: 0 1px 0 0 var(--surface);
+  user-select: none;
+}
+
+.device-tab .center-tab-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.device-tab::before,
+.device-tab::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.device-tab::before {
+  left: -10px;
+  border-bottom-right-radius: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 3px 3px 0 3px var(--surface);
+}
+
+.device-tab::after {
+  right: -10px;
+  border-bottom-left-radius: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -3px 3px 0 3px var(--surface);
 }
 
 .device-header-right {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding-bottom: 4px;
+}
+
+.device-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
 }
 
 .device-dims {
@@ -1364,8 +1463,9 @@ html, body {
 
 .modal-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
+  height: var(--tabbar-height);
   padding: 6px 16px 0;
   background: #0d1017;
   box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
@@ -1384,7 +1484,7 @@ html, body {
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 10px 10px 0 0;
-  padding: 8px 14px 9px;
+  padding: 0 14px;
   background: transparent;
   color: var(--muted);
   font-size: 13px;
@@ -1882,6 +1982,10 @@ html, body {
     overflow: hidden;
   }
 
+  .workspace > .chat-pane {
+    margin-right: 0;
+  }
+
   /* Main view: Full-screen Android display with zero scroll */
   .device-pane {
     flex: 1;
@@ -1889,9 +1993,14 @@ html, body {
     height: 100%;
     background: var(--bg);
     border-radius: 0;
-    padding: 2px 6px calc(54px + env(safe-area-inset-bottom));
+    padding: 0;
     gap: 0;
     overflow: hidden;
+  }
+
+  .device-body {
+    padding: 2px 6px calc(54px + env(safe-area-inset-bottom));
+    gap: 0;
   }
 
   .device-header {

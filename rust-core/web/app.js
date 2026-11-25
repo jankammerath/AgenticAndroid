@@ -352,6 +352,52 @@
     btn.addEventListener("click", () => setSidebarTab(btn.getAttribute("data-sidebar-tab")));
   });
 
+  // Desktop resizable left sidebar
+  (() => {
+    const resizer = document.getElementById("sidebar-resizer");
+    if (!resizer) return;
+    const STORAGE_KEY = "agentic_sidebar_width";
+    const MIN_W = 190;
+    const MAX_W = 520;
+    const applyWidth = (w) => {
+      const clamped = Math.max(MIN_W, Math.min(MAX_W, Math.round(w)));
+      document.documentElement.style.setProperty("--sidebar-width", `${clamped}px`);
+      return clamped;
+    };
+    try {
+      const saved = parseInt(localStorage.getItem(STORAGE_KEY) || "", 10);
+      if (saved >= MIN_W && saved <= MAX_W) applyWidth(saved);
+    } catch {}
+
+    let startX = 0;
+    let startW = 280;
+    resizer.addEventListener("pointerdown", (e) => {
+      if (window.innerWidth <= 900) return;
+      e.preventDefault();
+      resizer.setPointerCapture(e.pointerId);
+      resizer.classList.add("dragging");
+      startX = e.clientX;
+      startW = els.sidebar.getBoundingClientRect().width;
+    });
+    resizer.addEventListener("pointermove", (e) => {
+      if (!resizer.classList.contains("dragging")) return;
+      applyWidth(startW + (e.clientX - startX));
+    });
+    const finish = (e) => {
+      if (!resizer.classList.contains("dragging")) return;
+      resizer.classList.remove("dragging");
+      try {
+        resizer.releasePointerCapture(e.pointerId);
+      } catch {}
+      const finalW = applyWidth(startW + (e.clientX - startX));
+      try {
+        localStorage.setItem(STORAGE_KEY, String(finalW));
+      } catch {}
+    };
+    resizer.addEventListener("pointerup", finish);
+    resizer.addEventListener("pointercancel", finish);
+  })();
+
   function tabIconSvg(kind) {
     if (kind === "memory") {
       return `<svg class="center-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
