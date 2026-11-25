@@ -52,6 +52,7 @@
     mobileBtnAudio: document.getElementById("mobile-btn-audio"),
     mobileBtnSettings: document.getElementById("mobile-btn-settings"),
     mobileBtnLogout: document.getElementById("mobile-btn-logout"),
+    mobileBtnUploadApk: document.getElementById("mobile-btn-upload-apk"),
     mobileBtnRefreshFrame: document.getElementById("mobile-btn-refresh-frame"),
     mobileBtnInspectUi: document.getElementById("mobile-btn-inspect-ui"),
     btnWarnSettings: document.getElementById("btn-warn-settings"),
@@ -84,6 +85,7 @@
     screenPlaceholder: document.getElementById("screen-placeholder"),
     deviceDims: document.getElementById("device-dims"),
     touchRipple: document.getElementById("touch-ripple"),
+    btnUploadApk: document.getElementById("btn-upload-apk"),
     btnRefreshFrame: document.getElementById("btn-refresh-frame"),
     btnInspectUi: document.getElementById("btn-inspect-ui"),
     quickTypeForm: document.getElementById("quick-type-form"),
@@ -154,6 +156,16 @@
     uitreeModal: document.getElementById("uitree-modal"),
     btnCloseUitree: document.getElementById("btn-close-uitree"),
     uitreePre: document.getElementById("uitree-pre"),
+    apkModal: document.getElementById("apk-modal"),
+    btnCloseApk: document.getElementById("btn-close-apk"),
+    apkDropzone: document.getElementById("apk-dropzone"),
+    apkFileInput: document.getElementById("apk-file-input"),
+    apkDropzoneLabel: document.getElementById("apk-dropzone-label"),
+    apkFileMeta: document.getElementById("apk-file-meta"),
+    apkProgressWrap: document.getElementById("apk-progress-wrap"),
+    apkProgressBar: document.getElementById("apk-progress-bar"),
+    apkStatus: document.getElementById("apk-status"),
+    btnStartApkUpload: document.getElementById("btn-start-apk-upload"),
   };
 
   let appBooted = false;
@@ -1415,6 +1427,10 @@
     closeMobileOverlays();
     els.btnLogout.click();
   });
+  els.mobileBtnUploadApk.addEventListener("click", () => {
+    closeMobileOverlays();
+    els.btnUploadApk.click();
+  });
   els.mobileBtnRefreshFrame.addEventListener("click", () => els.btnRefreshFrame.click());
   els.mobileBtnInspectUi.addEventListener("click", () => {
     closeMobileOverlays();
@@ -1576,6 +1592,133 @@
 
   els.btnCloseUitree.addEventListener("click", () => {
     els.uitreeModal.classList.add("hidden");
+  });
+
+  // Sideload APK modal & upload with progress
+  let selectedApkFile = null;
+  let apkUploading = false;
+
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const setSelectedApk = (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".apk")) {
+      els.apkStatus.textContent = t("apk.invalid_file");
+      els.apkStatus.className = "apk-status err";
+      return;
+    }
+    selectedApkFile = file;
+    els.apkDropzoneLabel.textContent = file.name;
+    els.apkFileMeta.textContent = formatBytes(file.size);
+    els.apkStatus.textContent = "";
+    els.apkStatus.className = "apk-status";
+    els.apkProgressWrap.classList.add("hidden");
+    els.apkProgressBar.style.width = "0%";
+    els.btnStartApkUpload.disabled = false;
+  };
+
+  const openApkModal = () => {
+    selectedApkFile = null;
+    apkUploading = false;
+    els.apkFileInput.value = "";
+    els.apkDropzoneLabel.textContent = t("apk.drop_hint");
+    els.apkFileMeta.textContent = "";
+    els.apkStatus.textContent = "";
+    els.apkStatus.className = "apk-status";
+    els.apkProgressWrap.classList.add("hidden");
+    els.apkProgressBar.style.width = "0%";
+    els.btnStartApkUpload.disabled = true;
+    els.apkModal.classList.remove("hidden");
+  };
+
+  els.btnUploadApk.addEventListener("click", openApkModal);
+  els.btnCloseApk.addEventListener("click", () => {
+    if (!apkUploading) els.apkModal.classList.add("hidden");
+  });
+
+  els.apkFileInput.addEventListener("change", () => {
+    if (els.apkFileInput.files?.[0]) setSelectedApk(els.apkFileInput.files[0]);
+  });
+
+  ["dragenter", "dragover"].forEach((ev) => {
+    els.apkDropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      els.apkDropzone.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((ev) => {
+    els.apkDropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      els.apkDropzone.classList.remove("dragover");
+    });
+  });
+  els.apkDropzone.addEventListener("drop", (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setSelectedApk(file);
+  });
+
+  els.btnStartApkUpload.addEventListener("click", () => {
+    if (!selectedApkFile || apkUploading) return;
+    apkUploading = true;
+    els.btnStartApkUpload.disabled = true;
+    els.apkProgressWrap.classList.remove("hidden");
+    els.apkProgressBar.style.width = "0%";
+    els.apkStatus.className = "apk-status";
+    els.apkStatus.textContent = t("apk.uploading", { pct: 0 });
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/device/install-apk");
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Filename", selectedApkFile.name);
+
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) {
+        const pct = Math.min(100, Math.round((ev.loaded / ev.total) * 100));
+        els.apkProgressBar.style.width = `${pct}%`;
+        els.apkStatus.textContent =
+          pct >= 100 ? t("apk.launching") : t("apk.uploading", { pct });
+      }
+    };
+
+    xhr.onload = () => {
+      apkUploading = false;
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText || "{}");
+      } catch {}
+      if (xhr.status === 401) {
+        els.apkModal.classList.add("hidden");
+        showLoginScreen();
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+        els.apkProgressBar.style.width = "100%";
+        els.apkStatus.className = "apk-status ok";
+        els.apkStatus.textContent = data.needs_permission
+          ? t("apk.needs_permission")
+          : t("apk.launched");
+        setTimeout(() => {
+          if (!apkUploading) els.apkModal.classList.add("hidden");
+        }, 1600);
+      } else {
+        els.apkStatus.className = "apk-status err";
+        els.apkStatus.textContent = data.error || data.result?.error || `HTTP ${xhr.status}`;
+        els.btnStartApkUpload.disabled = false;
+      }
+    };
+
+    xhr.onerror = () => {
+      apkUploading = false;
+      els.apkStatus.className = "apk-status err";
+      els.apkStatus.textContent = t("apk.upload_failed");
+      els.btnStartApkUpload.disabled = false;
+    };
+
+    xhr.send(selectedApkFile);
   });
 
   els.quickTypeForm.addEventListener("submit", async (e) => {

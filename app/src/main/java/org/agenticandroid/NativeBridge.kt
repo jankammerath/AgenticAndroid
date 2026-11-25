@@ -1,9 +1,12 @@
 package org.agenticandroid
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.content.FileProvider
 import org.json.JSONObject
+import java.io.File
 
 object NativeBridge {
     init {
@@ -92,6 +95,53 @@ object NativeBridge {
                 return JSONObject().apply {
                     put("ok", true)
                     put("media_cast_active", false)
+                }.toString()
+            }
+
+            if (tool == "install_apk") {
+                val ctx = service ?: AgentForegroundService.appContext
+                    ?: return JSONObject().apply {
+                        put("ok", false)
+                        put("error", "Service context unavailable")
+                    }.toString()
+                val apkPath = params.optString("path", "").trim()
+                val apkFile = File(apkPath)
+                if (apkPath.isEmpty() || !apkFile.exists() || !apkFile.isFile) {
+                    return JSONObject().apply {
+                        put("ok", false)
+                        put("error", "APK file not found: $apkPath")
+                    }.toString()
+                }
+                val canInstall = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                    ctx.packageManager.canRequestPackageInstalls()
+                if (!canInstall && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val settingsIntent = Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${ctx.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    ctx.startActivity(settingsIntent)
+                    return JSONObject().apply {
+                        put("ok", true)
+                        put("needs_permission", true)
+                        put("message", "Enable 'Allow from this source' on the device, then upload again.")
+                    }.toString()
+                }
+                val apkUri = FileProvider.getUriForFile(
+                    ctx,
+                    "${ctx.packageName}.fileprovider",
+                    apkFile
+                )
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(apkUri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                ctx.startActivity(installIntent)
+                return JSONObject().apply {
+                    put("ok", true)
+                    put("needs_permission", false)
+                    put("launched", true)
                 }.toString()
             }
 

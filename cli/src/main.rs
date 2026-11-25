@@ -1104,6 +1104,11 @@ fn install_and_configure(cfg: &EffectiveConfig, apk_path: &Path) -> Result<(), S
         .args(["shell", "appops", "set", APP_PACKAGE, "ACCESS_RESTRICTED_SETTINGS", "allow"])
         .status();
 
+    // Allow sideloading APKs via the Web UI without extra unknown-sources prompt
+    let _ = Command::new(&adb)
+        .args(["shell", "appops", "set", APP_PACKAGE, "REQUEST_INSTALL_PACKAGES", "allow"])
+        .status();
+
     // Grant runtime permissions
     for perm in [
         "android.permission.RECORD_AUDIO",

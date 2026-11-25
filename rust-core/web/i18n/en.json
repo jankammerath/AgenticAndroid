@@ -179,5 +179,16 @@
 
   "uitree.title": "Accessibility UI Tree",
   "uitree.fetching": "Fetching accessibility UI tree...",
-  "uitree.error": "Error: {message}"
+  "uitree.error": "Error: {message}",
+
+  "apk.title": "Sideload APK",
+  "apk.desc": "Upload an Android .apk file to sideload onto the device. The Android installer prompt will appear on the Live Screen.",
+  "apk.drop_hint": "Drop .apk file here or click to browse",
+  "apk.upload_install": "Upload & Install",
+  "apk.invalid_file": "Please select a valid .apk file.",
+  "apk.uploading": "Uploading APK... {pct}%",
+  "apk.launching": "Opening Android installer...",
+  "apk.launched": "Installer opened on device — tap Install on the Live Screen.",
+  "apk.needs_permission": "Enable 'Allow from this source' on the Live Screen, then upload again.",
+  "apk.upload_failed": "Upload failed. Check your connection and try again."
 }

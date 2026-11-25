@@ -179,5 +179,16 @@
 
   "uitree.title": "Bedienungshilfe UI-Baum",
   "uitree.fetching": "Lade UI-Baum der Bedienungshilfe...",
-  "uitree.error": "Fehler: {message}"
+  "uitree.error": "Fehler: {message}",
+
+  "apk.title": "APK installieren",
+  "apk.desc": "Lade eine Android-.apk-Datei hoch, um sie auf dem Gerät zu installieren. Der Android-Installationsdialog erscheint auf dem Live-Bildschirm.",
+  "apk.drop_hint": ".apk-Datei hier ablegen oder zum Auswählen klicken",
+  "apk.upload_install": "Hochladen & Installieren",
+  "apk.invalid_file": "Bitte wähle eine gültige .apk-Datei aus.",
+  "apk.uploading": "Lade APK hoch... {pct}%",
+  "apk.launching": "Öffne Android-Installer...",
+  "apk.launched": "Installer auf dem Gerät geöffnet – tippe auf dem Live-Bildschirm auf Installieren.",
+  "apk.needs_permission": "Aktiviere auf dem Live-Bildschirm 'Aus dieser Quelle zulassen' und lade erneut hoch.",
+  "apk.upload_failed": "Upload fehlgeschlagen. Prüfe die Verbindung und versuche es erneut."
 }

@@ -4,8 +4,9 @@ use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
 use crate::state::{now_ms, AppPlaybook, AppState, CredentialEntry, Provider, Session};
 use crate::telegram::spawn_telegram_worker;
+use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Request, State};
+use axum::extract::{DefaultBodyLimit, Path, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Response};
@@ -68,6 +69,10 @@ pub async fn start_http_server(
         .route("/api/sessions/:id/message", post(api_send_message))
         .route("/api/sessions/:id/stop", post(api_stop_session))
         .route("/api/device/action", post(api_device_action))
+        .route(
+            "/api/device/install-apk",
+            post(api_install_apk).layer(DefaultBodyLimit::max(256 * 1024 * 1024)),
+        )
         .route("/api/device/ui-tree", get(api_ui_tree))
         .route("/api/device/screenshot", get(api_screenshot))
         .route("/api/media/:filename", get(api_get_media))
@@ -1062,6 +1067,82 @@ async fn api_device_action(
 
 async fn api_ui_tree(State(ctx): State<ServerCtx>) -> Json<Value> {
     Json(ctx.bridge.get_ui_tree().await)
+}
+
+async fn api_install_apk(
+    State(ctx): State<ServerCtx>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if body.len() < 4 || &body[0..4] != b"PK\x03\x04" {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Invalid APK file (expected Android .apk archive)." })),
+        )
+            .into_response();
+    }
+
+    let raw_name = headers
+        .get("x-filename")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("sideload.apk");
+    let mut clean: String = raw_name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '.')
+        .collect();
+    if clean.is_empty() || clean.starts_with('.') {
+        clean = "sideload.apk".to_string();
+    }
+    if !clean.to_lowercase().ends_with(".apk") {
+        clean.push_str(".apk");
+    }
+
+    let uploads_dir = ctx.state.config_dir.join("uploads");
+    if let Err(e) = tokio::fs::create_dir_all(&uploads_dir).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "error": format!("Failed to create uploads dir: {e}") })),
+        )
+            .into_response();
+    }
+
+    // Remove previous uploaded APKs to conserve device storage
+    if let Ok(mut entries) = tokio::fs::read_dir(&uploads_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let _ = tokio::fs::remove_file(entry.path()).await;
+        }
+    }
+
+    let dest_path = uploads_dir.join(&clean);
+    if let Err(e) = tokio::fs::write(&dest_path, &body).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "error": format!("Failed to save APK: {e}") })),
+        )
+            .into_response();
+    }
+
+    let payload = json!({
+        "tool": "install_apk",
+        "params": {
+            "path": dest_path.to_string_lossy()
+        }
+    });
+    match ctx.bridge.dispatch_async(payload).await {
+        Ok(res) => Json(json!({
+            "ok": res["ok"].as_bool().unwrap_or(true),
+            "filename": clean,
+            "size": body.len(),
+            "needs_permission": res["needs_permission"].as_bool().unwrap_or(false),
+            "result": res
+        }))
+        .into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "error": err })),
+        )
+            .into_response(),
+    }
 }
 
 async fn api_list_app_memory(State(ctx): State<ServerCtx>) -> Json<Vec<AppPlaybook>> {

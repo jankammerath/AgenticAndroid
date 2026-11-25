@@ -494,6 +494,9 @@
           </div>
           <div class="device-header-right">
             <span class="device-dims" id="device-dims">-- &times; --</span>
+            <button class="ghost-icon-btn" id="btn-upload-apk" title="Sideload APK" data-i18n-title="apk.title">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
             <button class="ghost-icon-btn" id="btn-refresh-frame" title="Refresh frame" data-i18n-title="device.refresh_frame">&#8635;</button>
             <button class="ghost-icon-btn" id="btn-inspect-ui" title="Inspect UI Tree" data-i18n-title="device.inspect_ui">{ }</button>
           </div>
@@ -515,6 +518,9 @@
             <div class="device-controls-mobile-head mobile-only">
               <span class="section-label" data-i18n="device.controls">Device Controls</span>
               <div class="device-header-right">
+                <button type="button" class="ghost-icon-btn" id="mobile-btn-upload-apk" title="Sideload APK" data-i18n-title="apk.title">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </button>
                 <button type="button" class="ghost-icon-btn" id="mobile-btn-refresh-frame" title="Refresh frame" data-i18n-title="device.refresh_frame">&#8635;</button>
                 <button type="button" class="ghost-icon-btn" id="mobile-btn-inspect-ui" title="Inspect UI Tree" data-i18n-title="device.inspect_ui">{ }</button>
                 <button type="button" class="ghost-icon-btn" id="btn-close-mobile-actions">&times;</button>
@@ -581,6 +587,33 @@
       <div class="login-error hidden" id="login-error"></div>
       <button type="submit" class="send-btn login-submit" data-i18n="login.submit">Sign In</button>
     </form>
+  </div>
+
+  <!-- Sideload APK Modal -->
+  <div class="modal-backdrop hidden" id="apk-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 data-i18n="apk.title">Sideload APK</h2>
+        <button class="ghost-icon-btn" id="btn-close-apk">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" data-i18n="apk.desc">Upload an Android .apk file to sideload onto the device. The Android installer prompt will appear on the Live Screen.</p>
+        <label class="apk-dropzone" id="apk-dropzone" for="apk-file-input">
+          <input type="file" id="apk-file-input" accept=".apk,application/vnd.android.package-archive" hidden />
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span id="apk-dropzone-label" data-i18n="apk.drop_hint">Drop .apk file here or click to browse</span>
+          <small id="apk-file-meta"></small>
+        </label>
+        <div class="apk-progress-wrap hidden" id="apk-progress-wrap">
+          <div class="apk-progress-bar" id="apk-progress-bar"></div>
+        </div>
+        <div class="apk-status" id="apk-status"></div>
+        <div class="modal-footer">
+          <span></span>
+          <button type="button" class="send-btn" id="btn-start-apk-upload" disabled data-i18n="apk.upload_install">Upload &amp; Install</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- UI Tree Modal -->
