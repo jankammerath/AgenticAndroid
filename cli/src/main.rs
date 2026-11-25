@@ -1807,6 +1807,200 @@ fn stop_managed_emulator(cfg: &EffectiveConfig, emulator_child: &mut Option<Chil
     thread::sleep(Duration::from_secs(2));
 }
 
+struct BootSplash {
+    active: Arc<AtomicBool>,
+    stage: Arc<Mutex<String>>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl BootSplash {
+    fn new() -> Self {
+        Self {
+            active: Arc::new(AtomicBool::new(false)),
+            stage: Arc::new(Mutex::new("Starting Agentic Android...".to_string())),
+            handle: None,
+        }
+    }
+
+    fn set_stage(&self, msg: impl Into<String>) {
+        if let Ok(mut s) = self.stage.lock() {
+            *s = msg.into();
+        }
+    }
+
+    fn start(&mut self, android_home: &Path, port: u16, initial_stage: impl Into<String>) {
+        self.set_stage(initial_stage);
+        if self.active.load(Ordering::SeqCst) {
+            return;
+        }
+        // Release any stale adb port forward so the splash listener can bind cleanly
+        let spec = format!("tcp:{port}");
+        let _ = Command::new(adb_bin(android_home))
+            .args(["forward", "--remove", &spec])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+
+        let addr = format!("127.0.0.1:{port}");
+        let Ok(listener) = TcpListener::bind(&addr) else {
+            return;
+        };
+        let _ = listener.set_nonblocking(true);
+        self.active.store(true, Ordering::SeqCst);
+
+        let active = self.active.clone();
+        let stage = self.stage.clone();
+        self.handle = Some(thread::spawn(move || {
+            while active.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        let _ = stream.set_nonblocking(false);
+                        let st = stage.clone();
+                        thread::spawn(move || serve_boot_splash_connection(stream, st));
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(40));
+                    }
+                    Err(_) => {
+                        thread::sleep(Duration::from_millis(100));
+                    }
+                }
+            }
+        }));
+    }
+
+    fn stop(&mut self) {
+        self.active.store(false, Ordering::SeqCst);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+impl Drop for BootSplash {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+fn serve_boot_splash_connection(mut stream: TcpStream, stage: Arc<Mutex<String>>) {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
+    let mut reader = BufReader::new(match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => return,
+    });
+    let mut req_line = String::new();
+    if reader.read_line(&mut req_line).is_err() || req_line.trim().is_empty() {
+        return;
+    }
+    let path = req_line.split_whitespace().nth(1).unwrap_or("/");
+    let clean_path = path.split('?').next().unwrap_or("/");
+    let cur_stage = stage
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or_else(|_| "Starting Android emulator...".to_string());
+
+    if clean_path == "/boot-status" {
+        let body = serde_json::json!({
+            "ok": true,
+            "booting": true,
+            "stage": cur_stage
+        });
+        write_http_json(&mut stream, "200 OK", &body);
+        return;
+    }
+
+    if clean_path.starts_with("/api/")
+        || clean_path.starts_with("/emulator-config")
+        || clean_path.starts_with("/ws/")
+    {
+        let body = serde_json::json!({
+            "ok": false,
+            "booting": true,
+            "stage": cur_stage,
+            "error": "Android emulator is starting up..."
+        });
+        write_http_json(&mut stream, "503 Service Unavailable", &body);
+        return;
+    }
+
+    let escaped_stage = cur_stage
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    let html = format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <title>Agentic Android — Starting...</title>
+  <style>
+    :root {{ color-scheme: dark; }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{
+      height: 100%; background: #0b0d12; color: #eef1f7;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }}
+    .card {{
+      width: 100%; max-width: 420px; background: #12151d; border-radius: 20px;
+      padding: 32px 28px; text-align: center;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    }}
+    .spinner {{
+      width: 40px; height: 40px; margin: 0 auto 20px;
+      border-radius: 50%; border: 3px solid rgba(79,124,255,0.2);
+      border-top-color: #4f7cff; animation: spin 0.9s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    h1 {{ font-size: 18px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }}
+    .stage {{ font-size: 13.5px; color: #93c5fd; margin-bottom: 10px; min-height: 20px; }}
+    .hint {{ font-size: 12px; color: #8a94a6; line-height: 1.5; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="spinner"></div>
+    <h1>Agentic Android</h1>
+    <div class="stage" id="stage">{escaped_stage}</div>
+    <p class="hint">The Android emulator is booting. This page will open automatically once ready.</p>
+  </div>
+  <script>
+    async function poll() {{
+      try {{
+        const res = await fetch("/api/health", {{ cache: "no-store" }});
+        if (res.ok) {{
+          const data = await res.json().catch(() => ({{}}));
+          if (data && data.service === "agentic-android-rust") {{
+            window.location.reload();
+            return;
+          }}
+        }}
+        const st = await fetch("/boot-status", {{ cache: "no-store" }});
+        if (st.ok) {{
+          const j = await st.json().catch(() => ({{}}));
+          if (j && j.stage) document.getElementById("stage").textContent = j.stage;
+        }}
+      }} catch {{}}
+      setTimeout(poll, 1500);
+    }}
+    setTimeout(poll, 1200);
+  </script>
+</body>
+</html>"##
+    );
+    let resp = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        html.len(),
+        html
+    );
+    let _ = stream.write_all(resp.as_bytes());
+    let _ = stream.flush();
+}
+
 fn cmd_run(opts: RunOpts) -> Result<(), String> {
     let cfg = load_config(&opts)?;
 
@@ -1828,16 +2022,22 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
     println!("==> [3/5] Checking Android emulator...");
     let mut emulator_child: Option<Child> = None;
     let mut active_avd = cfg.avd.clone();
+    let mut boot_splash = BootSplash::new();
 
     if find_running_device(&cfg.android_home).is_none() {
+        boot_splash.start(&cfg.android_home, cfg.port, "Preparing Android Virtual Device...");
         let avd_name = select_or_create_avd(&cfg)?;
         active_avd = Some(avd_name.clone());
+        boot_splash.set_stage(format!("Starting emulator '{avd_name}'..."));
         emulator_child = Some(spawn_emulator(&cfg, &avd_name)?);
+        boot_splash.set_stage(format!("Waiting for Android '{avd_name}' to boot..."));
         wait_for_emulator_boot(&cfg, emulator_child.as_mut(), 180)?;
     } else if active_avd.is_none() {
         active_avd = detect_running_avd_name(&cfg.android_home);
     }
 
+    boot_splash.set_stage("Installing Agentic Android & starting webserver...");
+    boot_splash.stop();
     install_and_configure(&cfg, &apk_path)?;
 
     println!(
@@ -1906,14 +2106,18 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
             };
             println!("==> Executing emulator control command: switching/restarting AVD '{target_avd}'...");
             pull_app_state_backup(&cfg);
+            boot_splash.start(&cfg.android_home, cfg.port, format!("Stopping emulator to switch to '{target_avd}'..."));
             stop_managed_emulator(&cfg, &mut emulator_child);
             active_avd = Some(target_avd.clone());
             *ctrl_state.current_avd.lock().unwrap() = target_avd.clone();
 
+            boot_splash.set_stage(format!("Starting emulator '{target_avd}'..."));
             match spawn_emulator(&cfg, &target_avd) {
                 Ok(mut new_child) => {
+                    boot_splash.set_stage(format!("Waiting for Android '{target_avd}' to boot..."));
                     let _ = wait_for_emulator_boot(&cfg, Some(&mut new_child), 180);
                     emulator_child = Some(new_child);
+                    boot_splash.stop();
                     if let Err(e) = install_and_configure(&cfg, &apk_path) {
                         eprintln!("WARNING: install_and_configure after restart failed: {e}");
                     } else if wait_for_health(cfg.port, 25) {
@@ -1923,6 +2127,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                     *ctrl_state.task_status.lock().unwrap() = String::new();
                 }
                 Err(e) => {
+                    boot_splash.stop();
                     eprintln!("ERROR: Failed to restart emulator '{target_avd}': {e}");
                     *ctrl_state.task_status.lock().unwrap() = format!("Failed to start '{target_avd}': {e}");
                 }
@@ -1951,20 +2156,25 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         };
 
         if child_exited || find_running_device(&cfg.android_home).is_none() {
+            let avd_name = active_avd
+                .clone()
+                .unwrap_or_else(|| "agentic_android_avd".to_string());
+            boot_splash.start(&cfg.android_home, cfg.port, format!("Restarting emulator '{avd_name}'..."));
             if !child_exited {
                 eprintln!("No running Android emulator detected; restarting...");
                 stop_managed_emulator(&cfg, &mut emulator_child);
             }
-            let avd_name = active_avd
-                .clone()
-                .unwrap_or_else(|| "agentic_android_avd".to_string());
+            boot_splash.set_stage(format!("Waiting for Android '{avd_name}' to boot..."));
             if let Ok(mut new_child) = spawn_emulator(&cfg, &avd_name) {
                 let _ = wait_for_emulator_boot(&cfg, Some(&mut new_child), 180);
                 emulator_child = Some(new_child);
+                boot_splash.stop();
                 if install_and_configure(&cfg, &apk_path).is_ok() && wait_for_health(cfg.port, 25) {
                     restore_app_state_backup(&cfg);
                     pull_app_state_backup(&cfg);
                 }
+            } else {
+                boot_splash.stop();
             }
             continue;
         }
