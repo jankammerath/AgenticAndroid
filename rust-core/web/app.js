@@ -95,6 +95,9 @@
     addKeyInput: document.getElementById("add-key-input"),
     configuredKeysList: document.getElementById("configured-keys-list"),
     keysSaveMsg: document.getElementById("keys-save-msg"),
+    customLlmForm: document.getElementById("custom-llm-form"),
+    cfgCustomBaseUrl: document.getElementById("cfg-custom-base-url"),
+    customLlmSaveMsg: document.getElementById("custom-llm-save-msg"),
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
@@ -994,11 +997,15 @@
     gemini: "Gemini (Google)",
     grok: "Grok (xAI)",
     openai: "OpenAI",
+    openrouter: "OpenRouter",
+    custom: "Custom / Local (Ollama)",
   };
 
   function renderConfiguredKeys() {
     const masked = state.config?.api_keys_masked || {};
-    const configured = ["claude", "gemini", "grok", "openai"].filter((id) => !!masked[id]);
+    const configured = ["claude", "gemini", "grok", "openai", "openrouter", "custom"].filter(
+      (id) => !!masked[id]
+    );
     els.configuredKeysList.innerHTML = "";
 
     if (configured.length === 0) {
@@ -1105,6 +1112,9 @@
   async function loadConfig() {
     state.config = await api("/api/config");
     renderConfiguredKeys();
+    if (els.cfgCustomBaseUrl) {
+      els.cfgCustomBaseUrl.value = state.config.custom_llm_base_url || "";
+    }
     els.cfgDefaultProvider.value = state.config.default_provider;
     populateDefaultModels(state.config.default_provider, state.config.default_model);
     document.getElementById("cfg-max-steps").value = state.config.max_agent_steps;
@@ -1818,6 +1828,25 @@
     }
     els.keysSaveMsg.textContent = t("keys.saved", { provider: PROVIDER_LABELS[provider] || provider });
   });
+
+  if (els.customLlmForm) {
+    els.customLlmForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      els.customLlmSaveMsg.textContent = "";
+      const url = els.cfgCustomBaseUrl.value.trim();
+      await api("/api/config", {
+        method: "PUT",
+        body: JSON.stringify({ custom_llm_base_url: url }),
+      });
+      delete state.providerModelsCache.custom;
+      await loadConfig();
+      const active = getActiveSession();
+      if (active && active.provider === "custom") {
+        await fetchModelsForProvider("custom", true);
+      }
+      els.customLlmSaveMsg.textContent = t("custom_llm.saved");
+    });
+  }
 
   els.cfgDefaultProvider.addEventListener("change", () => {
     const provider = els.cfgDefaultProvider.value;

@@ -78,6 +78,12 @@
   "keys.remove": "Entfernen",
   "keys.saved": "{provider}-Schlüssel gespeichert!",
 
+  "custom_llm.title": "Benutzerdefiniertes / Lokales LLM (OpenAI-kompatibel)",
+  "custom_llm.desc": "Verbinde dich mit Ollama, LM Studio, vLLM oder einem beliebigen OpenAI-kompatiblen /v1-Endpunkt. Im Emulator ist der Host-Localhost 10.0.2.2 (z. B. http://10.0.2.2:11434/v1).",
+  "custom_llm.base_url": "Basis-URL",
+  "custom_llm.save": "Endpunkt speichern",
+  "custom_llm.saved": "Benutzerdefinierter LLM-Endpunkt gespeichert!",
+
   "models.desc": "Wähle den Standardanbieter und das Standardmodell für neue Sitzungen sowie die Ausführungseinstellungen des Agenten.",
   "models.default_provider": "Standardanbieter",
   "models.default_model": "Standardmodell",

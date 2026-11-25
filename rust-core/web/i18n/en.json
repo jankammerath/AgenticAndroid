@@ -78,6 +78,12 @@
   "keys.remove": "Remove",
   "keys.saved": "{provider} key saved!",
 
+  "custom_llm.title": "Custom / Local LLM (OpenAI-Compatible)",
+  "custom_llm.desc": "Connect to Ollama, LM Studio, vLLM, or any OpenAI-compatible /v1 endpoint. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).",
+  "custom_llm.base_url": "Base URL",
+  "custom_llm.save": "Save Endpoint",
+  "custom_llm.saved": "Custom LLM endpoint saved!",
+
   "models.desc": "Choose the default provider and model used when creating new sessions, along with agent execution settings.",
   "models.default_provider": "Default Provider",
   "models.default_model": "Default Model",

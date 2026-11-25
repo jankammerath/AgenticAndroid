@@ -248,9 +248,10 @@ pub async fn fetch_provider_models(
     client: &reqwest::Client,
     provider: &Provider,
     api_key: &str,
+    custom_base_url: &str,
 ) -> Result<Vec<String>, String> {
     let key = api_key.trim();
-    if key.is_empty() {
+    if *provider != Provider::Custom && key.is_empty() {
         return Err(format!(
             "No API key configured for {}.",
             provider.display_name()
@@ -397,6 +398,80 @@ pub async fn fetch_provider_models(
             chat_models.reverse();
             Ok(chat_models)
         }
+        Provider::OpenRouter => {
+            let resp = client
+                .get("https://openrouter.ai/api/v1/models")
+                .bearer_auth(key)
+                .header("HTTP-Referer", "https://github.com/jankammerath/AgenticAndroid")
+                .header("X-Title", "Agentic Android")
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch OpenRouter models: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("OpenRouter models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let mut models: Vec<String> = data["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            models.sort();
+            Ok(models)
+        }
+        Provider::Custom => {
+            let base = custom_base_url.trim().trim_end_matches('/');
+            if base.is_empty() {
+                return Err("No Base URL configured for Custom / Local LLM.".to_string());
+            }
+            let url = format!("{base}/models");
+            let mut req = client.get(&url);
+            if !key.is_empty() {
+                req = req.bearer_auth(key);
+            }
+            let resp = req
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch models from {url}: {e}"))?;
+            let status = resp.status();
+            let text = resp.text().await.map_err(|e| format!("Read error: {e}"))?;
+            if !status.is_success() {
+                return Err(format!("Custom LLM models API ({status}): {text}"));
+            }
+            let data: Value = serde_json::from_str(&text)
+                .map_err(|e| format!("Invalid JSON: {e}"))?;
+            let mut models: Vec<String> = data["data"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if models.is_empty() {
+                models = data["models"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|m| {
+                                m["name"]
+                                    .as_str()
+                                    .or_else(|| m["id"].as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            }
+            models.sort();
+            Ok(models)
+        }
     }
 }
 
@@ -410,12 +485,13 @@ pub async fn call_llm(
     client: &reqwest::Client,
     provider: &Provider,
     api_key: &str,
+    custom_base_url: &str,
     model: &str,
     system_prompt: &str,
     messages: &[TurnMessage],
     gemini_grounding: GeminiGroundingOptions,
 ) -> Result<LlmResponse, String> {
-    if api_key.trim().is_empty() {
+    if *provider != Provider::Custom && api_key.trim().is_empty() {
         return Err(format!(
             "No API key configured for {}. Please add your API key in Settings.",
             provider.display_name()
@@ -431,6 +507,7 @@ pub async fn call_llm(
                 model,
                 system_prompt,
                 messages,
+                false,
             )
             .await
         }
@@ -442,6 +519,43 @@ pub async fn call_llm(
                 model,
                 system_prompt,
                 messages,
+                false,
+            )
+            .await
+        }
+        Provider::OpenRouter => {
+            call_openai_compatible(
+                client,
+                "https://openrouter.ai/api/v1/chat/completions",
+                api_key,
+                model,
+                system_prompt,
+                messages,
+                true,
+            )
+            .await
+        }
+        Provider::Custom => {
+            let base = custom_base_url.trim().trim_end_matches('/');
+            if base.is_empty() {
+                return Err(
+                    "No Base URL configured for Custom / Local LLM. Set it in Settings → Keys."
+                        .to_string(),
+                );
+            }
+            let endpoint = if base.ends_with("/chat/completions") {
+                base.to_string()
+            } else {
+                format!("{base}/chat/completions")
+            };
+            call_openai_compatible(
+                client,
+                &endpoint,
+                api_key,
+                model,
+                system_prompt,
+                messages,
+                false,
             )
             .await
         }
@@ -487,6 +601,7 @@ async fn call_openai_compatible(
     model: &str,
     system_prompt: &str,
     messages: &[TurnMessage],
+    is_openrouter: bool,
 ) -> Result<LlmResponse, String> {
     let mut api_messages = vec![json!({
         "role": "system",
@@ -574,10 +689,16 @@ async fn call_openai_compatible(
         "tool_choice": "auto"
     });
 
-    let resp = client
-        .post(endpoint)
-        .bearer_auth(api_key.trim())
-        .json(&body)
+    let mut req = client.post(endpoint).json(&body);
+    if !api_key.trim().is_empty() {
+        req = req.bearer_auth(api_key.trim());
+    }
+    if is_openrouter {
+        req = req
+            .header("HTTP-Referer", "https://github.com/jankammerath/AgenticAndroid")
+            .header("X-Title", "Agentic Android");
+    }
+    let resp = req
         .send()
         .await
         .map_err(|e| format!("HTTP error: {e}"))?;

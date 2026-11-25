@@ -13,6 +13,8 @@ pub enum Provider {
     Gemini,
     Grok,
     OpenAI,
+    OpenRouter,
+    Custom,
 }
 
 impl Provider {
@@ -22,6 +24,8 @@ impl Provider {
             Provider::Gemini => "gemini-2.5-flash",
             Provider::Grok => "grok-3",
             Provider::OpenAI => "gpt-4o",
+            Provider::OpenRouter => "anthropic/claude-sonnet-4",
+            Provider::Custom => "llama3.2",
         }
     }
 
@@ -31,6 +35,8 @@ impl Provider {
             Provider::Gemini => "Gemini (Google)",
             Provider::Grok => "Grok (xAI)",
             Provider::OpenAI => "OpenAI",
+            Provider::OpenRouter => "OpenRouter",
+            Provider::Custom => "Custom / Local (Ollama)",
         }
     }
 }
@@ -45,6 +51,10 @@ pub struct ApiKeys {
     pub grok: String,
     #[serde(default)]
     pub openai: String,
+    #[serde(default)]
+    pub openrouter: String,
+    #[serde(default)]
+    pub custom: String,
 }
 
 impl Default for ApiKeys {
@@ -54,6 +64,8 @@ impl Default for ApiKeys {
             gemini: String::new(),
             grok: String::new(),
             openai: String::new(),
+            openrouter: String::new(),
+            custom: String::new(),
         }
     }
 }
@@ -65,6 +77,8 @@ impl ApiKeys {
             Provider::Gemini => &self.gemini,
             Provider::Grok => &self.grok,
             Provider::OpenAI => &self.openai,
+            Provider::OpenRouter => &self.openrouter,
+            Provider::Custom => &self.custom,
         }
     }
 }
@@ -99,6 +113,8 @@ pub struct TelegramConfig {
 pub struct AppConfig {
     #[serde(default)]
     pub api_keys: ApiKeys,
+    #[serde(default = "default_custom_llm_base_url")]
+    pub custom_llm_base_url: String,
     #[serde(default = "default_provider")]
     pub default_provider: Provider,
     #[serde(default = "default_model_str")]
@@ -123,6 +139,9 @@ pub struct AppConfig {
     pub telegram: TelegramConfig,
 }
 
+fn default_custom_llm_base_url() -> String {
+    "http://10.0.2.2:11434/v1".to_string()
+}
 fn default_provider() -> Provider {
     Provider::Gemini
 }
@@ -158,6 +177,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             api_keys: ApiKeys::default(),
+            custom_llm_base_url: default_custom_llm_base_url(),
             default_provider: default_provider(),
             default_model: default_model_str(),
             max_agent_steps: default_max_steps(),

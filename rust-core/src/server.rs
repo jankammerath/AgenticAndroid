@@ -600,6 +600,7 @@ async fn api_internal_restore(
             || !cur.api_keys.gemini.is_empty()
             || !cur.api_keys.grok.is_empty()
             || !cur.api_keys.openai.is_empty()
+            || !cur.api_keys.openrouter.is_empty()
             || !cur.telegram.bot_token.is_empty();
         if already_configured {
             return Json(json!({ "ok": true, "restored": false, "reason": "already_configured" }))
@@ -723,6 +724,8 @@ async fn api_status(State(ctx): State<ServerCtx>) -> Json<Value> {
             "gemini": !cfg.api_keys.gemini.trim().is_empty(),
             "grok": !cfg.api_keys.grok.trim().is_empty(),
             "openai": !cfg.api_keys.openai.trim().is_empty(),
+            "openrouter": !cfg.api_keys.openrouter.trim().is_empty(),
+            "custom": !cfg.custom_llm_base_url.trim().is_empty(),
         }
     }))
 }
@@ -749,6 +752,16 @@ async fn api_providers() -> Json<Value> {
                 "id": "openai",
                 "name": "OpenAI",
                 "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o4-mini"]
+            },
+            {
+                "id": "openrouter",
+                "name": "OpenRouter",
+                "models": ["anthropic/claude-sonnet-4", "google/gemini-2.5-flash", "openai/gpt-4o", "deepseek/deepseek-chat-v3-0324"]
+            },
+            {
+                "id": "custom",
+                "name": "Custom / Local (Ollama)",
+                "models": ["llama3.2", "qwen2.5:14b", "qwen2.5vl:7b", "gemma3:12b"]
             }
         ]
     }))
@@ -763,15 +776,20 @@ async fn api_provider_models(
         "gemini" => Provider::Gemini,
         "grok" => Provider::Grok,
         "openai" => Provider::OpenAI,
+        "openrouter" => Provider::OpenRouter,
+        "custom" => Provider::Custom,
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    let api_key = {
+    let (api_key, custom_base_url) = {
         let cfg = ctx.state.config.read().await;
-        cfg.api_keys.get(&provider).to_string()
+        (
+            cfg.api_keys.get(&provider).to_string(),
+            cfg.custom_llm_base_url.clone(),
+        )
     };
 
-    match fetch_provider_models(&ctx.state.http_client, &provider, &api_key).await {
+    match fetch_provider_models(&ctx.state.http_client, &provider, &api_key, &custom_base_url).await {
         Ok(models) if !models.is_empty() => Ok(Json(json!({
             "ok": true,
             "source": "api",
@@ -799,6 +817,7 @@ async fn api_provider_models(
 struct SafeConfigResponse {
     api_keys_configured: Value,
     api_keys_masked: Value,
+    custom_llm_base_url: String,
     default_provider: Provider,
     default_model: String,
     max_agent_steps: usize,
@@ -834,13 +853,18 @@ async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse
             "gemini": !cfg.api_keys.gemini.trim().is_empty(),
             "grok": !cfg.api_keys.grok.trim().is_empty(),
             "openai": !cfg.api_keys.openai.trim().is_empty(),
+            "openrouter": !cfg.api_keys.openrouter.trim().is_empty(),
+            "custom": !cfg.custom_llm_base_url.trim().is_empty(),
         }),
         api_keys_masked: json!({
             "claude": mask_key(&cfg.api_keys.claude),
             "gemini": mask_key(&cfg.api_keys.gemini),
             "grok": mask_key(&cfg.api_keys.grok),
             "openai": mask_key(&cfg.api_keys.openai),
+            "openrouter": mask_key(&cfg.api_keys.openrouter),
+            "custom": mask_key(&cfg.api_keys.custom),
         }),
+        custom_llm_base_url: cfg.custom_llm_base_url,
         default_provider: cfg.default_provider,
         default_model: cfg.default_model,
         max_agent_steps: cfg.max_agent_steps,
@@ -870,6 +894,7 @@ struct TelegramConfigPatch {
 #[derive(Deserialize)]
 struct UpdateConfigRequest {
     api_keys: Option<ApiKeysPatch>,
+    custom_llm_base_url: Option<String>,
     default_provider: Option<Provider>,
     default_model: Option<String>,
     max_agent_steps: Option<usize>,
@@ -888,6 +913,8 @@ struct ApiKeysPatch {
     gemini: Option<String>,
     grok: Option<String>,
     openai: Option<String>,
+    openrouter: Option<String>,
+    custom: Option<String>,
 }
 
 async fn api_update_config(
@@ -909,6 +936,15 @@ async fn api_update_config(
             if let Some(v) = keys.openai {
                 cfg.api_keys.openai = v.trim().to_string();
             }
+            if let Some(v) = keys.openrouter {
+                cfg.api_keys.openrouter = v.trim().to_string();
+            }
+            if let Some(v) = keys.custom {
+                cfg.api_keys.custom = v.trim().to_string();
+            }
+        }
+        if let Some(url) = req.custom_llm_base_url {
+            cfg.custom_llm_base_url = url.trim().to_string();
         }
         if let Some(p) = req.default_provider {
             cfg.default_provider = p;

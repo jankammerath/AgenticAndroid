@@ -149,6 +149,7 @@ async fn execute_agent_loop(
             &state.http_client,
             &provider,
             &api_key,
+            &config.custom_llm_base_url,
             &model,
             &config.system_prompt,
             &turn_messages,

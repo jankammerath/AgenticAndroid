@@ -146,6 +146,8 @@
                       <option value="gemini">Gemini</option>
                       <option value="grok">Grok</option>
                       <option value="openai">OpenAI</option>
+                      <option value="openrouter">OpenRouter</option>
+                      <option value="custom">Custom / Local</option>
                     </select>
                     <select id="session-model-select" aria-label="AI Model"></select>
                     <button type="button" class="ghost-icon-btn" id="btn-refresh-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
@@ -294,6 +296,8 @@
                   <option value="gemini">Gemini (Google)</option>
                   <option value="grok">Grok (xAI)</option>
                   <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="custom">Custom / Local (Ollama)</option>
                 </select>
                 <input type="password" id="add-key-input" placeholder="Paste API key..." data-i18n-placeholder="keys.placeholder" autocomplete="off" />
                 <button type="submit" class="send-btn" data-i18n="keys.add">Add Key</button>
@@ -303,6 +307,19 @@
             <div class="modal-footer">
               <span class="save-msg" id="keys-save-msg"></span>
             </div>
+
+            <form class="security-card" id="custom-llm-form">
+              <h3 data-i18n="custom_llm.title">Custom / Local LLM (OpenAI-Compatible)</h3>
+              <p class="modal-desc" data-i18n="custom_llm.desc">Connect to Ollama, LM Studio, vLLM, or any OpenAI-compatible /v1 endpoint. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).</p>
+              <div class="field">
+                <label for="cfg-custom-base-url" data-i18n="custom_llm.base_url">Base URL</label>
+                <input type="url" id="cfg-custom-base-url" placeholder="http://10.0.2.2:11434/v1" autocomplete="off" />
+              </div>
+              <div class="modal-footer">
+                <span class="save-msg" id="custom-llm-save-msg"></span>
+                <button type="submit" class="send-btn" data-i18n="custom_llm.save">Save Endpoint</button>
+              </div>
+            </form>
           </div>
 
           <!-- Tab 2: Models & Agent Behavior -->
@@ -319,6 +336,8 @@
                   <option value="gemini">Gemini (Google)</option>
                   <option value="grok">Grok (xAI)</option>
                   <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="custom">Custom / Local (Ollama)</option>
                 </select>
               </div>
               <div class="field">

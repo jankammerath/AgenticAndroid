@@ -78,6 +78,12 @@
   "keys.remove": "移除",
   "keys.saved": "{provider} 密钥已保存！",
 
+  "custom_llm.title": "自定义 / 本地 LLM（OpenAI 兼容接口）",
+  "custom_llm.desc": "连接到 Ollama、LM Studio、vLLM 或任意 OpenAI 兼容的 /v1 接口。在模拟器中，宿主机 localhost 地址为 10.0.2.2（例如 http://10.0.2.2:11434/v1）。",
+  "custom_llm.base_url": "接口地址 (Base URL)",
+  "custom_llm.save": "保存接口",
+  "custom_llm.saved": "自定义 LLM 接口已保存！",
+
   "models.desc": "选择创建新会话时的默认服务商和模型，以及代理的执行参数。",
   "models.default_provider": "默认服务商",
   "models.default_model": "默认模型",
