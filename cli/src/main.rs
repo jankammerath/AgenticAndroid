@@ -11,6 +11,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+mod frida;
+
+use frida::{FridaManager, FridaSettings};
+
 const APP_PACKAGE: &str = "org.agenticandroid";
 const ACCESSIBILITY_SERVICE: &str = "org.agenticandroid/org.agenticandroid.AgentAccessibilityService";
 const MAIN_ACTIVITY: &str = "org.agenticandroid/.MainActivity";
@@ -156,6 +160,11 @@ struct RunOpts {
     /// Optional GPS altitude in meters
     #[arg(long, env = "EMU_ALTITUDE", allow_hyphen_values = true)]
     alt: Option<f64>,
+
+    /// Enable Frida (frida-server on the emulator + configured scripts) by default.
+    /// The Web UI setting (Settings -> Emulator) takes precedence once saved.
+    #[arg(long, env = "FRIDA")]
+    frida: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -174,6 +183,9 @@ struct FileConfig {
     latitude: Option<f64>,
     longitude: Option<f64>,
     altitude: Option<f64>,
+    frida: Option<bool>,
+    frida_server: Option<PathBuf>,
+    frida_bin: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -195,6 +207,9 @@ struct EffectiveConfig {
     latitude: Option<f64>,
     longitude: Option<f64>,
     altitude: Option<f64>,
+    frida_enabled: bool,
+    frida_server: Option<PathBuf>,
+    frida_bin: Option<String>,
 }
 
 fn main() {
@@ -397,6 +412,9 @@ fn load_config(opts: &RunOpts) -> Result<EffectiveConfig, String> {
         latitude: opts.lat.or(file_cfg.latitude),
         longitude: opts.lon.or(file_cfg.longitude),
         altitude: opts.alt.or(file_cfg.altitude),
+        frida_enabled: opts.frida || file_cfg.frida.unwrap_or(false),
+        frida_server: file_cfg.frida_server,
+        frida_bin: file_cfg.frida_bin,
     })
 }
 
@@ -1364,6 +1382,7 @@ struct ControlState {
     pending_cmd: Mutex<Option<SupervisorCmd>>,
     busy: AtomicBool,
     task_status: Mutex<String>,
+    frida: Arc<FridaManager>,
 }
 
 fn sdkmanager_bin(android_home: &Path) -> PathBuf {
@@ -1539,9 +1558,100 @@ fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
                     "gpu": gpu,
                     "headless": ctrl.cfg.headless,
                     "busy": ctrl.busy.load(Ordering::SeqCst),
-                    "task_status": task_status
+                    "task_status": task_status,
+                    "frida": ctrl.frida.status_json(false)
                 }),
             );
+        }
+        ("GET", "/emulator-config/frida") => {
+            let mut body = ctrl.frida.status_json(true);
+            body["ok"] = serde_json::Value::Bool(true);
+            write_http_json(&mut stream, "200 OK", &body);
+        }
+        ("POST", "/emulator-config/frida") => {
+            let new_settings: FridaSettings = match serde_json::from_value(body_json) {
+                Ok(s) => s,
+                Err(e) => {
+                    write_http_json(
+                        &mut stream,
+                        "400 Bad Request",
+                        &serde_json::json!({ "ok": false, "error": format!("Invalid Frida settings: {e}") }),
+                    );
+                    return;
+                }
+            };
+            if ctrl.frida.is_busy() {
+                write_http_json(
+                    &mut stream,
+                    "409 Conflict",
+                    &serde_json::json!({ "ok": false, "error": "A Frida operation is already in progress." }),
+                );
+                return;
+            }
+            if let Err(e) = ctrl.frida.save_settings(new_settings) {
+                write_http_json(
+                    &mut stream,
+                    "400 Bad Request",
+                    &serde_json::json!({ "ok": false, "error": e }),
+                );
+                return;
+            }
+            // While the emulator is (re)starting, the supervisor applies the new settings after boot
+            let applying = !ctrl.busy.load(Ordering::SeqCst) && ctrl.frida.try_begin();
+            if applying {
+                let ctrl_bg = ctrl.clone();
+                thread::spawn(move || {
+                    ctrl_bg.frida.apply(&ctrl_bg.cfg);
+                    ctrl_bg.frida.end();
+                });
+            }
+            let mut body = ctrl.frida.status_json(true);
+            body["ok"] = serde_json::Value::Bool(true);
+            body["applying"] = serde_json::Value::Bool(applying);
+            write_http_json(&mut stream, "200 OK", &body);
+        }
+        ("POST", "/emulator-config/frida-reload") => {
+            if !ctrl.frida.is_enabled() {
+                write_http_json(
+                    &mut stream,
+                    "400 Bad Request",
+                    &serde_json::json!({ "ok": false, "error": "Frida is disabled." }),
+                );
+                return;
+            }
+            if ctrl.busy.load(Ordering::SeqCst) || !ctrl.frida.try_begin() {
+                write_http_json(
+                    &mut stream,
+                    "409 Conflict",
+                    &serde_json::json!({ "ok": false, "error": "Another emulator operation is already in progress." }),
+                );
+                return;
+            }
+            let ctrl_bg = ctrl.clone();
+            thread::spawn(move || {
+                ctrl_bg.frida.reload(&ctrl_bg.cfg);
+                ctrl_bg.frida.end();
+            });
+            write_http_json(
+                &mut stream,
+                "200 OK",
+                &serde_json::json!({ "ok": true, "message": "Reloading Frida scripts." }),
+            );
+        }
+        ("POST", "/emulator-config/frida-log") => {
+            let id = body_json["id"].as_str().unwrap_or("").trim().to_string();
+            match ctrl.frida.log_tail(&id, 300) {
+                Some(log) => write_http_json(
+                    &mut stream,
+                    "200 OK",
+                    &serde_json::json!({ "ok": true, "id": id, "log": log }),
+                ),
+                None => write_http_json(
+                    &mut stream,
+                    "200 OK",
+                    &serde_json::json!({ "ok": true, "id": id, "log": "" }),
+                ),
+            }
         }
         ("POST", "/emulator-config/restart") => {
             if ctrl.busy.swap(true, Ordering::SeqCst) {
@@ -2023,6 +2133,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
     let mut emulator_child: Option<Child> = None;
     let mut active_avd = cfg.avd.clone();
     let mut boot_splash = BootSplash::new();
+    let frida_mgr = Arc::new(FridaManager::new(&cfg));
 
     if find_running_device(&cfg.android_home).is_none() {
         boot_splash.start(&cfg.android_home, cfg.port, "Preparing Android Virtual Device...");
@@ -2060,7 +2171,15 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
     }
 
     if !cfg.supervise {
+        if frida_mgr.is_enabled() {
+            eprintln!("NOTE: Frida is only managed in supervisor mode (omit --no-supervise).");
+        }
         return Ok(());
+    }
+
+    if frida_mgr.is_enabled() {
+        println!("==> Setting up Frida on the emulator...");
+        frida_mgr.apply(&cfg);
     }
 
     // Supervisor loop (used by daemon mode and systemd)
@@ -2077,6 +2196,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         pending_cmd: Mutex::new(None),
         busy: AtomicBool::new(false),
         task_status: Mutex::new(String::new()),
+        frida: frida_mgr.clone(),
     });
     spawn_control_server(ctrl_state.clone(), running.clone());
 
@@ -2107,6 +2227,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
             println!("==> Executing emulator control command: switching/restarting AVD '{target_avd}'...");
             pull_app_state_backup(&cfg);
             boot_splash.start(&cfg.android_home, cfg.port, format!("Stopping emulator to switch to '{target_avd}'..."));
+            frida_mgr.on_emulator_stopping();
             stop_managed_emulator(&cfg, &mut emulator_child);
             active_avd = Some(target_avd.clone());
             *ctrl_state.current_avd.lock().unwrap() = target_avd.clone();
@@ -2123,6 +2244,10 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                     } else if wait_for_health(cfg.port, 25) {
                         restore_app_state_backup(&cfg);
                         pull_app_state_backup(&cfg);
+                    }
+                    if frida_mgr.is_enabled() {
+                        *ctrl_state.task_status.lock().unwrap() = "Setting up Frida...".to_string();
+                        frida_mgr.apply(&cfg);
                     }
                     *ctrl_state.task_status.lock().unwrap() = String::new();
                 }
@@ -2160,6 +2285,7 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                 .clone()
                 .unwrap_or_else(|| "agentic_android_avd".to_string());
             boot_splash.start(&cfg.android_home, cfg.port, format!("Restarting emulator '{avd_name}'..."));
+            frida_mgr.on_emulator_stopping();
             if !child_exited {
                 eprintln!("No running Android emulator detected; restarting...");
                 stop_managed_emulator(&cfg, &mut emulator_child);
@@ -2172,6 +2298,9 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                 if install_and_configure(&cfg, &apk_path).is_ok() && wait_for_health(cfg.port, 25) {
                     restore_app_state_backup(&cfg);
                     pull_app_state_backup(&cfg);
+                }
+                if frida_mgr.is_enabled() {
+                    frida_mgr.apply(&cfg);
                 }
             } else {
                 boot_splash.stop();
@@ -2210,9 +2339,13 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
                 ])
                 .status();
         }
+
+        // Keep frida-server alive and re-attach scripts after app restarts
+        frida_mgr.maintain(&cfg);
     }
 
     println!("==> Shutting down supervisor...");
+    frida_mgr.shutdown();
     pull_app_state_backup(&cfg);
     if let Some(mut child) = emulator_child {
         let _ = Command::new(adb_bin(&cfg.android_home))
@@ -2296,6 +2429,9 @@ fn cmd_daemon_start(opts: RunOpts) -> Result<(), String> {
     }
     if let Some(alt) = opts.alt {
         args.extend(["--alt".into(), alt.to_string()]);
+    }
+    if opts.frida {
+        args.push("--frida".into());
     }
     args.extend(["--state-dir".into(), state_dir.display().to_string()]);
 

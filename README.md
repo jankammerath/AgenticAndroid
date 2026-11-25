@@ -261,9 +261,21 @@ android_home = "/opt/android-sdk"
 latitude = 50.7374
 longitude = 7.0982
 # altitude = 60.0
+# frida = true                      # start frida-server + configured scripts by default
+# frida_bin = "/usr/local/bin/frida" # host frida CLI (default: auto-detect on PATH)
+# frida_server = "/opt/frida/frida-server-android-x86_64"  # optional; otherwise auto-downloaded
 ```
 
 Once running, open **http://localhost:8080** in your browser.
+
+### Frida Instrumentation (Emulator)
+
+When running under the supervisor (`run` / `daemon` / systemd), open **Settings → Emulator → Frida Instrumentation** in the Web UI to:
+
+- **Turn Frida on/off.** When enabled, the supervisor switches the emulator to root (`adb root`, falling back to `su`), downloads the `frida-server` build matching your host `frida --version` and the emulator ABI (cached in `<state_dir>/frida/server/`), pushes it to `/data/local/tmp/frida-server` and starts it. Disabling stops all scripts and `frida-server`.
+- **Define which scripts to load.** Each script has a target app package, a mode (*attach* to the running app via `frida -N`, or *spawn* the app with the script via `frida -f`), an on/off switch, and its JavaScript source (paste or import a `.js` file). Logs are viewable per script in the UI.
+
+Settings are persisted in `<state_dir>/frida/settings.json` and re-applied automatically after every emulator (re)start; attach-mode scripts are re-attached when their target app restarts. Requirements: `pip install frida-tools` on the host, `curl` + `xz` for the auto-download, and a rootable system image (`google_apis` / `default`, not `google_apis_playstore`). The `frida` config key / `--frida` flag only sets the initial default; once saved in the UI, the UI setting wins.
 
 ## Releasing a New Version
 

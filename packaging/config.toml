@@ -27,3 +27,12 @@ state_dir = "/var/lib/agentic-android"
 # latitude = 50.7374
 # longitude = 7.0982
 # altitude = 60.0
+
+# Frida instrumentation (can also be toggled and scripted from the Web UI: Settings -> Emulator).
+# Requires frida-tools on the host (pip install frida-tools) and a rootable (non-Play Store) image.
+# The Web UI setting takes precedence once saved.
+# frida = false
+# Host frida CLI (default: auto-detected on PATH, ~/.local/bin, /usr/local/bin)
+# frida_bin = "/usr/local/bin/frida"
+# Optional prebuilt frida-server for the emulator ABI (default: auto-downloaded to match frida_bin's version)
+# frida_server = "/opt/frida/frida-server-android-x86_64"

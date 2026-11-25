@@ -2171,6 +2171,15 @@
       els.btnEmuCreate.disabled = busy;
       els.emuMsg.textContent = data.task_status || "";
 
+      fridaEls.card.classList.toggle("hidden", !data.frida);
+      if (data.frida) {
+        if (!frida.settings) {
+          loadFridaConfig();
+        } else {
+          renderFridaStatus(data.frida);
+        }
+      }
+
       if (busy && !emuPollTimer) {
         emuPollTimer = setInterval(loadEmulatorConfig, 3000);
       } else if (!busy && emuPollTimer) {
@@ -2233,6 +2242,301 @@
     } catch (err) {
       els.emuMsg.textContent = err.message;
     }
+  });
+
+  // Frida instrumentation (Settings -> Emulator, proxied to host supervisor)
+  const fridaEls = {
+    card: document.getElementById("frida-card"),
+    pill: document.getElementById("frida-status-pill"),
+    pillLabel: document.getElementById("frida-status-label"),
+    enabled: document.getElementById("frida-enabled"),
+    meta: document.getElementById("frida-meta"),
+    list: document.getElementById("frida-script-list"),
+    editor: document.getElementById("frida-editor"),
+    name: document.getElementById("frida-script-name"),
+    target: document.getElementById("frida-script-target"),
+    mode: document.getElementById("frida-script-mode"),
+    scriptEnabled: document.getElementById("frida-script-enabled"),
+    source: document.getElementById("frida-script-source"),
+    file: document.getElementById("frida-script-file"),
+    btnImport: document.getElementById("btn-frida-import"),
+    btnCancel: document.getElementById("btn-frida-cancel"),
+    btnAdd: document.getElementById("btn-frida-add"),
+    btnReload: document.getElementById("btn-frida-reload"),
+    logWrap: document.getElementById("frida-log-wrap"),
+    logTitle: document.getElementById("frida-log-title"),
+    log: document.getElementById("frida-log"),
+    btnLogRefresh: document.getElementById("btn-frida-log-refresh"),
+    btnLogClose: document.getElementById("btn-frida-log-close"),
+    msg: document.getElementById("frida-msg"),
+  };
+  const frida = { settings: null, info: null, editingId: null, logId: null, pollTimer: null, loading: false };
+  const FRIDA_TEMPLATE = 'Java.perform(() => {\n  console.log("[frida] script loaded");\n});\n';
+
+  function fridaSettingsFrom(data) {
+    return {
+      enabled: !!data.enabled,
+      scripts: (data.scripts || []).map((s) => ({
+        id: s.id,
+        name: s.name || "",
+        target: s.target || "",
+        mode: s.mode === "spawn" ? "spawn" : "attach",
+        enabled: s.enabled !== false,
+        source: s.source || "",
+      })),
+    };
+  }
+
+  function renderFridaStatus(info) {
+    if (!info) return;
+    frida.info = info;
+    const status = info.status || "";
+    const isError = status.startsWith("Error");
+    let label = t("frida.status_off");
+    let cls = "";
+    if (info.enabled) {
+      if (isError) {
+        label = t("frida.status_error");
+        cls = "err";
+      } else if (info.busy || (!info.server_running && status)) {
+        label = t("frida.status_starting");
+        cls = "warn";
+      } else if (info.server_running) {
+        label = t("frida.status_on");
+        cls = "ok";
+      } else {
+        label = t("frida.status_starting");
+        cls = "warn";
+      }
+    }
+    fridaEls.pill.className = `status-pill ${cls}`.trim();
+    fridaEls.pillLabel.textContent = label;
+    if (!frida.loading) fridaEls.enabled.checked = !!info.enabled;
+
+    const hostInfo = info.host_version
+      ? t("frida.host_version", { version: info.host_version })
+      : t("frida.host_missing", { bin: info.frida_bin || "frida" });
+    fridaEls.meta.textContent = status ? `${hostInfo} · ${status}` : hostInfo;
+    fridaEls.btnReload.disabled = !info.enabled || !!info.busy;
+    renderFridaList();
+
+    const pending = !!info.busy || (info.enabled && !info.server_running && !isError && !!status);
+    if (pending && !frida.pollTimer) {
+      frida.pollTimer = setInterval(refreshFridaStatus, 3000);
+    } else if (!pending && frida.pollTimer) {
+      clearInterval(frida.pollTimer);
+      frida.pollTimer = null;
+    }
+  }
+
+  function renderFridaList() {
+    const scripts = frida.settings?.scripts || [];
+    const runtime = new Map((frida.info?.scripts || []).map((s) => [s.id, s]));
+    fridaEls.list.innerHTML = "";
+    if (!scripts.length) {
+      const empty = document.createElement("p");
+      empty.className = "modal-desc";
+      empty.textContent = t("frida.no_scripts");
+      fridaEls.list.appendChild(empty);
+      return;
+    }
+    for (const s of scripts) {
+      const rt = runtime.get(s.id) || {};
+      let stateText;
+      let stateCls = "";
+      if (!s.enabled) {
+        stateText = t("frida.disabled");
+      } else if (rt.running) {
+        stateText = t("frida.running");
+        stateCls = "ok";
+      } else {
+        stateText = rt.last_exit || t("frida.stopped");
+        stateCls = frida.info?.enabled ? "warn" : "";
+      }
+      const item = document.createElement("div");
+      item.className = `frida-script-item${s.enabled ? "" : " disabled"}`;
+      item.innerHTML = `
+        <div class="frida-script-info">
+          <div class="frida-script-title">
+            <span>${escapeHtml(s.name)}</span>
+            <span class="status-pill ${stateCls}"><span class="dot"></span><span class="label">${escapeHtml(stateText)}</span></span>
+          </div>
+          <div class="frida-script-sub">${escapeHtml(s.mode === "spawn" ? t("frida.mode_spawn") : t("frida.mode_attach"))} · ${escapeHtml(s.target)}</div>
+        </div>
+        <div class="security-actions">
+          <button type="button" class="pill-btn" data-act="toggle">${escapeHtml(s.enabled ? t("frida.disable_btn") : t("frida.enable_btn"))}</button>
+          <button type="button" class="pill-btn" data-act="edit">${escapeHtml(t("frida.edit"))}</button>
+          <button type="button" class="pill-btn" data-act="log">${escapeHtml(t("frida.view_log"))}</button>
+          <button type="button" class="pill-btn pill-btn-danger" data-act="delete">${escapeHtml(t("frida.delete"))}</button>
+        </div>`;
+      item.querySelector('[data-act="toggle"]').addEventListener("click", () => {
+        const next = fridaSettingsFrom(frida.settings);
+        next.scripts = next.scripts.map((x) => (x.id === s.id ? { ...x, enabled: !x.enabled } : x));
+        saveFridaSettings(next);
+      });
+      item.querySelector('[data-act="edit"]').addEventListener("click", () => openFridaEditor(s));
+      item.querySelector('[data-act="log"]').addEventListener("click", () => openFridaLog(s));
+      item.querySelector('[data-act="delete"]').addEventListener("click", () => {
+        if (!confirm(t("frida.delete_confirm", { name: s.name }))) return;
+        const next = fridaSettingsFrom(frida.settings);
+        next.scripts = next.scripts.filter((x) => x.id !== s.id);
+        if (frida.editingId === s.id) closeFridaEditor();
+        if (frida.logId === s.id) closeFridaLog();
+        saveFridaSettings(next);
+      });
+      fridaEls.list.appendChild(item);
+    }
+  }
+
+  async function loadFridaConfig() {
+    try {
+      const data = await api("/emulator-config/frida");
+      if (!data || data.managed === false) return;
+      frida.settings = fridaSettingsFrom(data);
+      renderFridaStatus(data);
+    } catch (err) {
+      fridaEls.msg.textContent = err.message;
+    }
+  }
+
+  async function refreshFridaStatus() {
+    try {
+      const data = await api("/emulator-config/frida");
+      if (!data || data.managed === false) return;
+      if (!frida.settings) frida.settings = fridaSettingsFrom(data);
+      renderFridaStatus(data);
+      if (frida.logId) refreshFridaLog();
+    } catch {
+      // Emulator may be restarting; keep polling
+    }
+  }
+
+  async function saveFridaSettings(next) {
+    frida.loading = true;
+    fridaEls.msg.textContent = "";
+    try {
+      const data = await api("/emulator-config/frida", {
+        method: "POST",
+        body: JSON.stringify(next),
+      });
+      frida.settings = fridaSettingsFrom(data);
+      fridaEls.msg.textContent = data.applying ? t("frida.saved") : t("frida.saved_pending");
+      frida.loading = false;
+      renderFridaStatus(data);
+      if (!frida.pollTimer) frida.pollTimer = setInterval(refreshFridaStatus, 3000);
+      return true;
+    } catch (err) {
+      fridaEls.msg.textContent = err.message;
+      frida.loading = false;
+      if (frida.info) renderFridaStatus(frida.info);
+      return false;
+    }
+  }
+
+  function openFridaEditor(script) {
+    frida.editingId = script ? script.id : null;
+    fridaEls.name.value = script ? script.name : "";
+    fridaEls.target.value = script ? script.target : "";
+    fridaEls.mode.value = script ? script.mode : "attach";
+    fridaEls.scriptEnabled.checked = script ? script.enabled : true;
+    fridaEls.source.value = script ? script.source : FRIDA_TEMPLATE;
+    fridaEls.editor.classList.remove("hidden");
+    fridaEls.btnAdd.disabled = true;
+    fridaEls.name.focus();
+  }
+
+  function closeFridaEditor() {
+    frida.editingId = null;
+    fridaEls.editor.classList.add("hidden");
+    fridaEls.btnAdd.disabled = false;
+  }
+
+  async function refreshFridaLog() {
+    if (!frida.logId) return;
+    try {
+      const data = await api("/emulator-config/frida-log", {
+        method: "POST",
+        body: JSON.stringify({ id: frida.logId }),
+      });
+      fridaEls.log.textContent = data.log || t("frida.log_empty");
+      fridaEls.log.scrollTop = fridaEls.log.scrollHeight;
+    } catch (err) {
+      fridaEls.log.textContent = err.message;
+    }
+  }
+
+  function openFridaLog(script) {
+    frida.logId = script.id;
+    fridaEls.logTitle.textContent = t("frida.log_for", { name: script.name });
+    fridaEls.log.textContent = "";
+    fridaEls.logWrap.classList.remove("hidden");
+    refreshFridaLog();
+  }
+
+  function closeFridaLog() {
+    frida.logId = null;
+    fridaEls.logWrap.classList.add("hidden");
+  }
+
+  fridaEls.enabled.addEventListener("change", async () => {
+    const next = fridaSettingsFrom(frida.settings || { scripts: [] });
+    next.enabled = fridaEls.enabled.checked;
+    const ok = await saveFridaSettings(next);
+    if (!ok) fridaEls.enabled.checked = !next.enabled;
+  });
+
+  window.addEventListener("agentic:langchange", () => {
+    if (frida.info) renderFridaStatus(frida.info);
+  });
+
+  fridaEls.btnAdd.addEventListener("click", () => openFridaEditor(null));
+  fridaEls.btnCancel.addEventListener("click", closeFridaEditor);
+  fridaEls.btnLogClose.addEventListener("click", closeFridaLog);
+  fridaEls.btnLogRefresh.addEventListener("click", refreshFridaLog);
+  fridaEls.btnImport.addEventListener("click", (e) => {
+    e.preventDefault();
+    fridaEls.file.click();
+  });
+  fridaEls.file.addEventListener("change", async () => {
+    const f = fridaEls.file.files?.[0];
+    if (!f) return;
+    fridaEls.source.value = await f.text();
+    if (!fridaEls.name.value.trim()) fridaEls.name.value = f.name.replace(/\.(js|ts)$/i, "");
+    fridaEls.file.value = "";
+  });
+
+  fridaEls.btnReload.addEventListener("click", async () => {
+    fridaEls.msg.textContent = t("frida.reloading");
+    try {
+      await api("/emulator-config/frida-reload", { method: "POST", body: JSON.stringify({}) });
+      if (!frida.pollTimer) frida.pollTimer = setInterval(refreshFridaStatus, 3000);
+      setTimeout(refreshFridaStatus, 1500);
+    } catch (err) {
+      fridaEls.msg.textContent = err.message;
+    }
+  });
+
+  fridaEls.editor.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const entry = {
+      id: frida.editingId || "",
+      name: fridaEls.name.value.trim(),
+      target: fridaEls.target.value.trim(),
+      mode: fridaEls.mode.value === "spawn" ? "spawn" : "attach",
+      enabled: fridaEls.scriptEnabled.checked,
+      source: fridaEls.source.value,
+    };
+    if (!entry.target || !entry.source.trim()) {
+      fridaEls.msg.textContent = t("frida.target_required");
+      return;
+    }
+    const next = fridaSettingsFrom(frida.settings || { scripts: [] });
+    if (frida.editingId) {
+      next.scripts = next.scripts.map((x) => (x.id === frida.editingId ? entry : x));
+    } else {
+      next.scripts.push(entry);
+    }
+    if (await saveFridaSettings(next)) closeFridaEditor();
   });
 
   els.btnLogout.addEventListener("click", async () => {

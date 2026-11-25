@@ -1828,6 +1828,101 @@ html, body {
   display: none !important;
 }
 
+/* Frida (Emulator tab) */
+.frida-meta:empty {
+  display: none;
+}
+
+.frida-script-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frida-script-list:empty {
+  display: none;
+}
+
+.frida-script-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.frida-script-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.frida-script-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.frida-script-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frida-script-item.disabled .frida-script-title {
+  opacity: 0.55;
+}
+
+.frida-script-item .security-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.frida-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.frida-editor-enabled {
+  justify-content: flex-end;
+}
+
+.frida-source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px !important;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 180px;
+}
+
+.frida-log-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frida-log {
+  max-height: 320px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.status-pill.err .dot {
+  background: #f87171;
+}
+
 /* App Memory Tab */
 .memory-list {
   display: flex;

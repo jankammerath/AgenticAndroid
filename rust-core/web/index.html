@@ -543,6 +543,84 @@
                 <button type="submit" class="send-btn" id="btn-emu-create" data-i18n="emulator.create_btn">Download &amp; Create AVD</button>
               </div>
             </form>
+
+            <div class="security-card" id="frida-card">
+              <div class="security-card-head">
+                <div>
+                  <h3 data-i18n="frida.title">Frida Instrumentation</h3>
+                  <p class="modal-desc" data-i18n="frida.desc">Run frida-server on the emulator and automatically load the scripts below. Requires a rootable system image (google_apis, not Play Store) and frida-tools on the host.</p>
+                </div>
+                <span class="status-pill" id="frida-status-pill"><span class="dot"></span><span class="label" id="frida-status-label">--</span></span>
+              </div>
+              <div class="field checkbox-field">
+                <label>
+                  <input type="checkbox" id="frida-enabled" />
+                  <span data-i18n="frida.enable">Enable Frida on the emulator</span>
+                </label>
+              </div>
+              <p class="modal-desc frida-meta" id="frida-meta"></p>
+
+              <div class="frida-script-list" id="frida-script-list"></div>
+
+              <form class="frida-editor hidden" id="frida-editor">
+                <div class="settings-row settings-row-2">
+                  <div class="field">
+                    <label for="frida-script-name" data-i18n="frida.script_name">Script Name</label>
+                    <input type="text" id="frida-script-name" maxlength="80" placeholder="e.g. SSL pinning bypass" data-i18n-placeholder="frida.script_name_placeholder" />
+                  </div>
+                  <div class="field">
+                    <label for="frida-script-target" data-i18n="frida.target">Target App Package</label>
+                    <input type="text" id="frida-script-target" placeholder="com.example.app" required />
+                  </div>
+                </div>
+                <div class="settings-row settings-row-2">
+                  <div class="field">
+                    <label for="frida-script-mode" data-i18n="frida.mode">Mode</label>
+                    <select id="frida-script-mode">
+                      <option value="attach" data-i18n="frida.mode_attach">Attach to running app</option>
+                      <option value="spawn" data-i18n="frida.mode_spawn">Spawn app with script</option>
+                    </select>
+                  </div>
+                  <div class="field checkbox-field frida-editor-enabled">
+                    <label>
+                      <input type="checkbox" id="frida-script-enabled" checked />
+                      <span data-i18n="frida.script_enabled">Load this script</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="frida-script-source">
+                    <span data-i18n="frida.source">Script Source (JavaScript)</span>
+                    <button type="button" class="pill-btn" id="btn-frida-import" data-i18n="frida.import">Import .js</button>
+                  </label>
+                  <textarea id="frida-script-source" class="frida-source" rows="12" spellcheck="false" placeholder="Java.perform(() => { ... });"></textarea>
+                  <input type="file" id="frida-script-file" accept=".js,.ts,text/javascript" class="hidden" />
+                </div>
+                <div class="security-actions">
+                  <button type="submit" class="send-btn" data-i18n="frida.save_script">Save Script</button>
+                  <button type="button" class="pill-btn" id="btn-frida-cancel" data-i18n="frida.cancel">Cancel</button>
+                </div>
+              </form>
+
+              <div class="frida-log-wrap hidden" id="frida-log-wrap">
+                <div class="security-card-head">
+                  <h3 id="frida-log-title" data-i18n="frida.log">Script Log</h3>
+                  <div class="security-actions">
+                    <button type="button" class="pill-btn" id="btn-frida-log-refresh" data-i18n="frida.refresh">Refresh</button>
+                    <button type="button" class="pill-btn" id="btn-frida-log-close" data-i18n="frida.close">Close</button>
+                  </div>
+                </div>
+                <pre class="code-box frida-log" id="frida-log"></pre>
+              </div>
+
+              <div class="modal-footer">
+                <span class="save-msg" id="frida-msg"></span>
+                <div class="security-actions">
+                  <button type="button" class="pill-btn" id="btn-frida-reload" data-i18n="frida.reload">Reload Scripts</button>
+                  <button type="button" class="pill-btn pill-btn-accent" id="btn-frida-add" data-i18n="frida.add">+ Add Script</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
