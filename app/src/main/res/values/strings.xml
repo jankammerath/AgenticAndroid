@@ -3,4 +3,25 @@
     <string name="launcher_name">Agentic</string>
     <string name="accessibility_service_label">Agentic Android Control</string>
     <string name="accessibility_service_description">Allows the Agentic Android Rust core and your configured AI agent to observe the screen and perform taps, swipes, text input, and navigation actions.</string>
+
+    <string name="subtitle_controller">Minimal Webserver Controller (Rust Core)</string>
+    <string name="label_webserver_port">Webserver Port</string>
+    <string name="btn_start_server">Start Server</string>
+    <string name="btn_stop_server">Stop Server</string>
+    <string name="status_server_running">Server: Running (Rust NDK Core)</string>
+    <string name="status_server_stopped">Server: Stopped</string>
+    <string name="status_server_url">Web UI: http://%1$s:%2$d\n(Emulator via adb forward: http://localhost:%2$d)</string>
+
+    <string name="section_permissions_streaming">Permissions &amp; Streaming</string>
+    <string name="status_accessibility_active">Accessibility Service: Active</string>
+    <string name="status_accessibility_disabled">Accessibility Service: Disabled</string>
+    <string name="btn_enable_accessibility">Enable Accessibility Service</string>
+    <string name="status_cast_active">Media Cast: Active (High-FPS Video + Audio)</string>
+    <string name="status_cast_fallback">Media Cast: Fallback (Accessibility Screenshots)</string>
+    <string name="btn_start_media_cast">Start High-FPS Screen &amp; Audio Cast</string>
+    <string name="footer_web_ui_hint">All AI keys, sessions, chat, and device controls are managed through the Web UI served by the Rust core.</string>
+
+    <string name="notification_channel_name">Agentic Android Server</string>
+    <string name="notification_title">Agentic Android Running</string>
+    <string name="notification_text">Web UI active on port %1$d</string>
 </resources>

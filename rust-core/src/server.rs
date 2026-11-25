@@ -20,6 +20,10 @@ use tower_http::cors::{Any, CorsLayer};
 
 const INDEX_HTML: &str = include_str!("../web/index.html");
 const STYLE_CSS: &str = include_str!("../web/style.css");
+const I18N_JS: &str = include_str!("../web/i18n.js");
+const I18N_EN_JSON: &str = include_str!("../web/i18n/en.json");
+const I18N_DE_JSON: &str = include_str!("../web/i18n/de.json");
+const I18N_ZH_CN_JSON: &str = include_str!("../web/i18n/zh-CN.json");
 const APP_JS: &str = include_str!("../web/app.js");
 const MANIFEST_JSON: &str = include_str!("../web/manifest.json");
 const SW_JS: &str = include_str!("../web/sw.js");
@@ -85,6 +89,8 @@ pub async fn start_http_server(
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/style.css", get(serve_css))
+        .route("/i18n.js", get(serve_i18n_js))
+        .route("/i18n/:file", get(serve_i18n_json))
         .route("/app.js", get(serve_js))
         .route("/manifest.json", get(serve_manifest))
         .route("/sw.js", get(serve_sw))
@@ -144,6 +150,28 @@ async fn serve_css() -> Response {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
         STYLE_CSS,
+    )
+        .into_response()
+}
+
+async fn serve_i18n_js() -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        I18N_JS,
+    )
+        .into_response()
+}
+
+async fn serve_i18n_json(Path(file): Path<String>) -> Response {
+    let body = match file.as_str() {
+        "en.json" => I18N_EN_JSON,
+        "de.json" => I18N_DE_JSON,
+        "zh-CN.json" => I18N_ZH_CN_JSON,
+        _ => return (StatusCode::NOT_FOUND, "Not found").into_response(),
+    };
+    (
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        body,
     )
         .into_response()
 }

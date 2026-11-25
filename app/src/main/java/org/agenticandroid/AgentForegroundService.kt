@@ -153,8 +153,8 @@ class AgentForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Agentic Android Running")
-            .setContentText("Web UI active on port $port")
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_text, port))
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(openIntent)
             .setOngoing(true)
@@ -348,7 +348,7 @@ class AgentForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Agentic Android Server",
+                getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)

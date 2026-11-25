@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Agentic Android</string>
+    <string name="launcher_name">Agentic</string>
+    <string name="accessibility_service_label">Agentic Android 控制</string>
+    <string name="accessibility_service_description">允许 Agentic Android Rust 核心和您配置的 AI 代理查看屏幕并执行点击、滑动、文本输入和导航操作。</string>
+
+    <string name="subtitle_controller">轻量 Web 服务器控制器（Rust 核心）</string>
+    <string name="label_webserver_port">Web 服务器端口</string>
+    <string name="btn_start_server">启动服务器</string>
+    <string name="btn_stop_server">停止服务器</string>
+    <string name="status_server_running">服务器：运行中（Rust NDK 核心）</string>
+    <string name="status_server_stopped">服务器：已停止</string>
+    <string name="status_server_url">Web 界面：http://%1$s:%2$d\n（模拟器通过 adb forward：http://localhost:%2$d）</string>
+
+    <string name="section_permissions_streaming">权限与推流</string>
+    <string name="status_accessibility_active">无障碍服务：已启用</string>
+    <string name="status_accessibility_disabled">无障碍服务：未启用</string>
+    <string name="btn_enable_accessibility">启用无障碍服务</string>
+    <string name="status_cast_active">媒体投屏：运行中（高帧率视频 + 音频）</string>
+    <string name="status_cast_fallback">媒体投屏：回退模式（无障碍截图）</string>
+    <string name="btn_start_media_cast">开启高帧率画面与音频推流</string>
+    <string name="footer_web_ui_hint">所有 AI 密钥、会话、聊天和设备控制均通过 Rust 核心提供的 Web 界面进行管理。</string>
+
+    <string name="notification_channel_name">Agentic Android 服务器</string>
+    <string name="notification_title">Agentic Android 正在运行</string>
+    <string name="notification_text">Web 界面正在端口 %1$d 上运行</string>
+</resources>

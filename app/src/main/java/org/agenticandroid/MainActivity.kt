@@ -166,28 +166,28 @@ class MainActivity : AppCompatActivity() {
             ?: editPort.text.toString().toIntOrNull() ?: 8080
 
         if (running) {
-            txtServerStatus.text = "Server: Running (Rust NDK Core)"
+            txtServerStatus.text = getString(R.string.status_server_running)
             txtServerStatus.setTextColor(0xFF22C55E.toInt())
             val ip = getLocalIpAddress() ?: "127.0.0.1"
-            txtServerUrl.text = "Web UI: http://$ip:$port\n(Emulator via adb forward: http://localhost:$port)"
+            txtServerUrl.text = getString(R.string.status_server_url, ip, port)
         } else {
-            txtServerStatus.text = "Server: Stopped"
+            txtServerStatus.text = getString(R.string.status_server_stopped)
             txtServerStatus.setTextColor(0xFFF59E0B.toInt())
             txtServerUrl.text = ""
         }
 
         val accEnabled = AgentAccessibilityService.instance != null
         txtAccessibilityStatus.text = if (accEnabled) {
-            "Accessibility Service: Active"
+            getString(R.string.status_accessibility_active)
         } else {
-            "Accessibility Service: Disabled"
+            getString(R.string.status_accessibility_disabled)
         }
         txtAccessibilityStatus.setTextColor(if (accEnabled) 0xFF22C55E.toInt() else 0xFFF59E0B.toInt())
 
         txtCaptureStatus.text = if (AgentForegroundService.isMediaCastActive) {
-            "Media Cast: Active (High-FPS Video + Audio)"
+            getString(R.string.status_cast_active)
         } else {
-            "Media Cast: Fallback (Accessibility Screenshots)"
+            getString(R.string.status_cast_fallback)
         }
     }
 

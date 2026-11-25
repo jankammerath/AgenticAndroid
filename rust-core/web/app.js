@@ -1,4 +1,6 @@
 (() => {
+  const t = (key, vars) => (window.I18n ? window.I18n.t(key, vars) : key);
+
   const state = {
     providers: [],
     providerModelsCache: {},
@@ -171,7 +173,7 @@
     if (state.config?.notify_on_complete === false) return;
     if (Notification.permission !== "granted") return;
 
-    const raw = String(message?.content || "Task finished.")
+    const raw = String(message?.content || t("chat.task_finished"))
       .replace(/!\[[^\]]*\]\([^)]*\)/g, "[Image]")
       .replace(/[*_`#>-]/g, "")
       .trim();
@@ -250,17 +252,17 @@
     }
 
     if (effSource === "api") {
-      els.modelSourceHint.textContent = `${models.length} models`;
+      els.modelSourceHint.textContent = t("chat.models_count", { count: models.length });
       els.modelSourceHint.className = "model-source-hint live";
-      els.modelSourceHint.title = "Fetched live from provider API";
+      els.modelSourceHint.title = t("chat.models_live_title");
     } else if (effSource === "loading") {
-      els.modelSourceHint.textContent = "Loading...";
+      els.modelSourceHint.textContent = t("chat.loading");
       els.modelSourceHint.className = "model-source-hint";
-      els.modelSourceHint.title = "Fetching models from provider API";
+      els.modelSourceHint.title = t("chat.loading_models_title");
     } else {
-      els.modelSourceHint.textContent = "Add API key";
+      els.modelSourceHint.textContent = t("chat.add_api_key");
       els.modelSourceHint.className = "model-source-hint";
-      els.modelSourceHint.title = cached?.error || "Configure API key to fetch live models";
+      els.modelSourceHint.title = cached?.error || t("chat.add_api_key_title");
     }
   }
 
@@ -314,7 +316,7 @@
     for (const s of state.sessions) {
       const isTelegram = s.source === "telegram" || !!s.telegram_chat_id;
       const tgBadge = isTelegram
-        ? `<span class="session-source-badge" title="Telegram Bot Session">TG</span>`
+        ? `<span class="session-source-badge" title="${escapeHtml(t("sessions.telegram_badge_title"))}">TG</span>`
         : "";
       const item = document.createElement("div");
       item.className = `session-item ${s.id === state.activeSessionId ? "active" : ""}`;
@@ -323,7 +325,7 @@
           <div class="session-title-row">${tgBadge}<span class="session-title">${escapeHtml(s.title)}</span></div>
           <div class="session-sub">${escapeHtml(s.provider)} · ${escapeHtml(s.model)}</div>
         </div>
-        <button class="session-del" title="Delete session">&times;</button>
+        <button class="session-del" title="${escapeHtml(t("sessions.delete_title"))}">&times;</button>
       `;
       item.querySelector(".session-meta").addEventListener("click", () => {
         state.activeSessionId = s.id;
@@ -514,7 +516,7 @@
 
   function parseErrorDisplay(raw) {
     let text = String(raw || "").trim().replace(/^Error:\s*/i, "");
-    let title = "Request failed";
+    let title = t("chat.request_failed");
     let message = text;
     let details = null;
 
@@ -551,7 +553,7 @@
     if (session.messages.length === 0) {
       const empty = document.createElement("div");
       empty.className = "msg welcome";
-      empty.innerHTML = `<img src="/logo.png" alt="Agentic Android" class="welcome-logo" /><h3>Agentic Android</h3><p>Describe what you want done on your device, or interact with the live screen on the right.</p>`;
+      empty.innerHTML = `<img src="/logo.png" alt="Agentic Android" class="welcome-logo" /><h3>Agentic Android</h3><p>${escapeHtml(t("chat.welcome_desc"))}</p>`;
       els.chatMessages.appendChild(empty);
       return;
     }
@@ -564,7 +566,7 @@
       if (isError) {
         const err = parseErrorDisplay(m.content);
         const detailsHtml = err.details
-          ? `<details class="error-details"><summary>Raw details</summary><pre>${escapeHtml(err.details)}</pre></details>`
+          ? `<details class="error-details"><summary>${escapeHtml(t("chat.raw_details"))}</summary><pre>${escapeHtml(err.details)}</pre></details>`
           : "";
         div.innerHTML = `
           <div class="error-card">
@@ -583,13 +585,17 @@
       if (m.tool_traces && m.tool_traces.length > 0) {
         const items = m.tool_traces
           .map(
-            (t) =>
-              `<div class="trace-item"><strong>${escapeHtml(t.tool_name)}</strong>(${escapeHtml(
-                JSON.stringify(t.arguments)
-              )})<br/>→ ${escapeHtml(t.result)}</div>`
+            (tr) =>
+              `<div class="trace-item"><strong>${escapeHtml(tr.tool_name)}</strong>(${escapeHtml(
+                JSON.stringify(tr.arguments)
+              )})<br/>→ ${escapeHtml(tr.result)}</div>`
           )
           .join("");
-        tracesHtml = `<details class="traces"><summary>${m.tool_traces.length} device action${m.tool_traces.length === 1 ? "" : "s"}</summary><div class="trace-list">${items}</div></details>`;
+        const actionSummary =
+          m.tool_traces.length === 1
+            ? t("chat.device_action_one")
+            : t("chat.device_action_many", { count: m.tool_traces.length });
+        tracesHtml = `<details class="traces"><summary>${escapeHtml(actionSummary)}</summary><div class="trace-list">${items}</div></details>`;
       }
       const bodyHtml =
         m.role === "assistant"
@@ -631,7 +637,7 @@
     if (configured.length === 0) {
       const empty = document.createElement("div");
       empty.className = "keys-empty";
-      empty.textContent = "No provider API keys added yet. Select a provider below to add one.";
+      empty.textContent = t("keys.empty");
       els.configuredKeysList.appendChild(empty);
       return;
     }
@@ -644,7 +650,7 @@
           <span class="key-row-name">${escapeHtml(PROVIDER_LABELS[id] || id)}</span>
           <span class="key-row-mask">${escapeHtml(masked[id])}</span>
         </div>
-        <button type="button" class="pill-btn pill-btn-danger">Remove</button>
+        <button type="button" class="pill-btn pill-btn-danger">${escapeHtml(t("keys.remove"))}</button>
       `;
       row.querySelector("button").addEventListener("click", async () => {
         await api("/api/config", {
@@ -690,13 +696,13 @@
     }
 
     if (effSource === "api") {
-      els.cfgModelSourceHint.textContent = `${models.length} models`;
+      els.cfgModelSourceHint.textContent = t("chat.models_count", { count: models.length });
       els.cfgModelSourceHint.className = "model-source-hint live";
     } else if (effSource === "loading") {
-      els.cfgModelSourceHint.textContent = "Loading...";
+      els.cfgModelSourceHint.textContent = t("chat.loading");
       els.cfgModelSourceHint.className = "model-source-hint";
     } else {
-      els.cfgModelSourceHint.textContent = "Add API key";
+      els.cfgModelSourceHint.textContent = t("chat.add_api_key");
       els.cfgModelSourceHint.className = "model-source-hint";
     }
   }
@@ -743,13 +749,16 @@
     document.getElementById("cfg-system-prompt").value = state.config.system_prompt || "";
     const tg = state.config.telegram || {};
     els.tgEnabled.checked = !!tg.enabled;
-    els.tgTokenStatus.textContent = tg.token_masked ? `Saved (${tg.token_masked})` : "Not set";
+    els.tgTokenStatus.textContent = tg.token_masked
+      ? t("telegram.token_saved", { masked: tg.token_masked })
+      : t("telegram.token_not_set");
     els.tgAllowedIds.value = (tg.allowed_chat_ids || []).join(", ");
     const tgStatus = tg.status || "Disabled";
     const tgOk = tgStatus.startsWith("Connected");
     const tgWarn = tg.enabled && !tgOk;
     els.tgStatusBadge.className = `status-pill ${tgOk ? "ok" : tgWarn ? "warn" : ""}`;
-    els.tgStatusBadge.querySelector(".label").textContent = tgStatus;
+    els.tgStatusBadge.querySelector(".label").textContent =
+      tgStatus === "Disabled" ? t("telegram.disabled") : tgStatus;
     updateKeyWarning();
   }
 
@@ -766,7 +775,7 @@
       const st = await api("/api/status");
       const accEnabled = !!st.device?.accessibility_enabled;
       const accClass = `status-pill ${accEnabled ? "ok" : "warn"}`;
-      const accText = accEnabled ? "Accessibility" : "Accessibility Off";
+      const accText = accEnabled ? t("topbar.accessibility") : t("topbar.accessibility_off");
       els.badgeAccessibility.className = accClass;
       els.badgeAccessibility.querySelector(".label").textContent = accText;
       els.mobileBadgeAccessibility.className = accClass;
@@ -785,9 +794,9 @@
       updateHighFpsButtons();
     } catch {
       els.badgeAccessibility.className = "status-pill warn";
-      els.badgeAccessibility.querySelector(".label").textContent = "Disconnected";
+      els.badgeAccessibility.querySelector(".label").textContent = t("topbar.disconnected");
       els.mobileBadgeAccessibility.className = "status-pill warn";
-      els.mobileBadgeAccessibility.querySelector(".label").textContent = "Disconnected";
+      els.mobileBadgeAccessibility.querySelector(".label").textContent = t("topbar.disconnected");
     }
   }
 
@@ -799,9 +808,9 @@
 
     ws.onopen = () => {
       els.badgeVideo.className = "status-pill ok";
-      els.badgeVideo.querySelector(".label").textContent = "Screen";
+      els.badgeVideo.querySelector(".label").textContent = t("topbar.screen");
       els.mobileBadgeVideo.className = "status-pill ok";
-      els.mobileBadgeVideo.querySelector(".label").textContent = "Screen";
+      els.mobileBadgeVideo.querySelector(".label").textContent = t("topbar.screen");
     };
 
     ws.onmessage = (ev) => {
@@ -826,23 +835,31 @@
 
     ws.onclose = () => {
       els.badgeVideo.className = "status-pill warn";
-      els.badgeVideo.querySelector(".label").textContent = "Reconnecting";
+      els.badgeVideo.querySelector(".label").textContent = t("topbar.reconnecting");
       els.mobileBadgeVideo.className = "status-pill warn";
-      els.mobileBadgeVideo.querySelector(".label").textContent = "Reconnecting";
+      els.mobileBadgeVideo.querySelector(".label").textContent = t("topbar.reconnecting");
       setTimeout(connectVideoWs, 2000);
     };
   }
 
   function updateHighFpsButtons() {
     const label = state.highFpsActive
-      ? "High-FPS On"
+      ? t("topbar.high_fps_on")
       : state.highFpsPending
-        ? "High-FPS..."
-        : "High-FPS Off";
+        ? t("topbar.high_fps_pending")
+        : t("topbar.high_fps_off");
     els.btnHighFpsToggle.textContent = label;
     els.mobileBtnHighFps.textContent = label;
     els.btnHighFpsToggle.classList.toggle("active", state.highFpsActive);
     els.mobileBtnHighFps.classList.toggle("active", state.highFpsActive);
+  }
+
+  function updateAudioButtons() {
+    const label = state.audioEnabled ? t("topbar.audio_on") : t("topbar.audio_off");
+    els.btnAudioToggle.textContent = label;
+    els.mobileBtnAudio.textContent = label;
+    els.btnAudioToggle.classList.toggle("active", state.audioEnabled);
+    els.mobileBtnAudio.classList.toggle("active", state.audioEnabled);
   }
 
   async function toggleHighFps() {
@@ -894,18 +911,12 @@
         state.audioWs.close();
         state.audioWs = null;
       }
-      els.btnAudioToggle.textContent = "Audio Off";
-      els.mobileBtnAudio.textContent = "Audio Off";
-      els.btnAudioToggle.classList.remove("active");
-      els.mobileBtnAudio.classList.remove("active");
+      updateAudioButtons();
       return;
     }
 
     state.audioEnabled = true;
-    els.btnAudioToggle.textContent = "Audio On";
-    els.mobileBtnAudio.textContent = "Audio On";
-    els.btnAudioToggle.classList.add("active");
-    els.mobileBtnAudio.classList.add("active");
+    updateAudioButtons();
     if (!state.audioCtx) {
       state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -971,13 +982,13 @@
         const evt = JSON.parse(ev.data);
         if (evt.type === "agent_status") {
           els.mobileChatDot.classList.toggle("hidden", !evt.running);
-          els.mobileChatLabel.textContent = evt.running ? "Working..." : "Chat";
+          els.mobileChatLabel.textContent = evt.running ? t("chat.working") : t("chat.label");
           if (evt.session_id === state.activeSessionId) {
             els.agentActivity.classList.toggle("hidden", !evt.running);
-            els.agentActivityText.textContent = evt.status || "Working...";
+            els.agentActivityText.textContent = evt.status || t("chat.working");
           }
         } else if (evt.type === "tool_call" && evt.session_id === state.activeSessionId) {
-          els.agentActivityText.textContent = `Executed ${evt.tool_name}`;
+          els.agentActivityText.textContent = t("chat.executed_tool", { tool: evt.tool_name });
         } else if (evt.type === "assistant_message") {
           await loadSessions();
           notifyAgentCompleted(evt.message);
@@ -1151,7 +1162,7 @@
     ensureNotificationPermission();
     els.chatInput.value = "";
     els.agentActivity.classList.remove("hidden");
-    els.agentActivityText.textContent = "Starting agent...";
+    els.agentActivityText.textContent = t("chat.starting_agent");
     await api(`/api/sessions/${session.id}/message`, {
       method: "POST",
       body: JSON.stringify({
@@ -1195,12 +1206,12 @@
 
   els.btnInspectUi.addEventListener("click", async () => {
     els.uitreeModal.classList.remove("hidden");
-    els.uitreePre.textContent = "Fetching accessibility UI tree...";
+    els.uitreePre.textContent = t("uitree.fetching");
     try {
       const tree = await api("/api/device/ui-tree");
       els.uitreePre.textContent = JSON.stringify(tree, null, 2);
     } catch (err) {
-      els.uitreePre.textContent = `Error: ${err.message}`;
+      els.uitreePre.textContent = t("uitree.error", { message: err.message });
     }
   });
 
@@ -1282,7 +1293,7 @@
     if (active) {
       await fetchModelsForProvider(active.provider, true);
     }
-    els.keysSaveMsg.textContent = `${PROVIDER_LABELS[provider] || provider} key saved!`;
+    els.keysSaveMsg.textContent = t("keys.saved", { provider: PROVIDER_LABELS[provider] || provider });
   });
 
   els.cfgDefaultProvider.addEventListener("change", () => {
@@ -1316,7 +1327,7 @@
       body: JSON.stringify(payload),
     });
     await loadConfig();
-    els.settingsSaveMsg.textContent = "Model settings saved!";
+    els.settingsSaveMsg.textContent = t("models.saved");
   });
 
   els.tabPanelPrompt.addEventListener("submit", async (e) => {
@@ -1327,7 +1338,7 @@
       body: JSON.stringify({ system_prompt: systemPrompt }),
     });
     await loadConfig();
-    els.promptSaveMsg.textContent = "System prompt saved!";
+    els.promptSaveMsg.textContent = t("prompt.saved");
   });
 
   async function loadAppMemory() {
@@ -1336,7 +1347,7 @@
     if (!list || list.length === 0) {
       const empty = document.createElement("div");
       empty.className = "keys-empty";
-      empty.textContent = "No app playbooks saved yet. The agent will record UI quirks automatically, or you can add one below.";
+      empty.textContent = t("memory.empty");
       els.appMemoryList.appendChild(empty);
       return;
     }
@@ -1347,7 +1358,7 @@
       const title = pb.app_label ? `${pb.app_label}` : pb.package_name;
       const ver = pb.app_version ? ` · v${pb.app_version}` : "";
       const purposeHtml = pb.purpose
-        ? `<div class="memory-purpose">Use for: ${escapeHtml(pb.purpose)}</div>`
+        ? `<div class="memory-purpose">${escapeHtml(t("memory.use_for", { purpose: pb.purpose }))}</div>`
         : "";
       const notesHtml = (pb.notes || []).length
         ? `<ul class="memory-notes">${pb.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`
@@ -1359,8 +1370,8 @@
             <div class="memory-pkg">${escapeHtml(pb.package_name)}${escapeHtml(ver)}</div>
           </div>
           <div class="security-actions">
-            <button type="button" class="pill-btn btn-edit-mem">Edit</button>
-            <button type="button" class="pill-btn pill-btn-danger btn-del-mem">Delete</button>
+            <button type="button" class="pill-btn btn-edit-mem">${escapeHtml(t("memory.edit"))}</button>
+            <button type="button" class="pill-btn pill-btn-danger btn-del-mem">${escapeHtml(t("memory.delete"))}</button>
           </div>
         </div>
         ${purposeHtml}
@@ -1404,7 +1415,7 @@
     els.memLabel.value = "";
     els.memPurpose.value = "";
     els.memNotes.value = "";
-    els.memSaveMsg.textContent = "App memory saved!";
+    els.memSaveMsg.textContent = t("memory.saved");
     await loadAppMemory();
   });
 
@@ -1431,7 +1442,7 @@
       method: "PUT",
       body: JSON.stringify({ telegram: tgPatch }),
     });
-    els.tgSaveMsg.textContent = "Telegram settings saved!";
+    els.tgSaveMsg.textContent = t("telegram.saved");
     await loadConfig();
     setTimeout(() => loadConfig(), 2500);
   });
@@ -1456,17 +1467,23 @@
     els.mobileBtnLogout.classList.toggle("hidden", !st.auth_enabled);
     els.secAuthBadge.className = `status-pill ${st.auth_enabled ? "ok" : ""}`;
     els.secAuthBadge.querySelector(".label").textContent = st.auth_enabled
-      ? `Enabled (${st.username || "active"})`
-      : "Disabled";
+      ? t("security.enabled_user", { user: st.username || t("security.active") })
+      : t("security.disabled");
     if (st.username) els.secUsername.value = st.username;
-    els.btnSaveCredentials.textContent = st.auth_enabled ? "Update Credentials" : "Enable Login";
+    els.btnSaveCredentials.textContent = st.auth_enabled
+      ? t("security.update_credentials")
+      : t("security.enable_login");
     els.btnDisableAuth.classList.toggle("hidden", !st.auth_enabled);
 
     els.secMfaBadge.className = `status-pill ${st.mfa_enabled ? "ok" : ""}`;
-    els.secMfaBadge.querySelector(".label").textContent = st.mfa_enabled ? "Active" : "Off";
+    els.secMfaBadge.querySelector(".label").textContent = st.mfa_enabled
+      ? t("security.active")
+      : t("security.off");
     els.btnSetupMfa.disabled = !st.auth_enabled;
     els.btnSetupMfa.style.opacity = st.auth_enabled ? "1" : "0.45";
-    els.btnSetupMfa.textContent = st.mfa_enabled ? "Reconfigure 2FA" : "Set Up 2FA";
+    els.btnSetupMfa.textContent = st.mfa_enabled
+      ? t("security.reconfigure_mfa")
+      : t("security.setup_mfa");
     els.btnDisableMfa.classList.toggle("hidden", !st.mfa_enabled);
     return st;
   }
@@ -1484,7 +1501,7 @@
       });
       els.secPassword.value = "";
       await refreshAuthStatus();
-      els.secMsg.textContent = "Login credentials saved!";
+      els.secMsg.textContent = t("security.credentials_saved");
     } catch (err) {
       els.secMsg.textContent = err.message;
     }
@@ -1494,7 +1511,7 @@
     await api("/api/auth/disable", { method: "POST" });
     els.secMfaSetupBox.classList.add("hidden");
     await refreshAuthStatus();
-    els.secMsg.textContent = "Login protection disabled.";
+    els.secMsg.textContent = t("security.login_disabled");
   });
 
   els.btnSetupMfa.addEventListener("click", async () => {
@@ -1521,7 +1538,7 @@
       });
       els.secMfaSetupBox.classList.add("hidden");
       await refreshAuthStatus();
-      els.secMsg.textContent = "2FA enabled!";
+      els.secMsg.textContent = t("security.mfa_enabled");
     } catch (err) {
       els.secMsg.textContent = err.message;
     }
@@ -1531,7 +1548,7 @@
     await api("/api/auth/mfa/disable", { method: "POST" });
     els.secMfaSetupBox.classList.add("hidden");
     await refreshAuthStatus();
-    els.secMsg.textContent = "2FA disabled.";
+    els.secMsg.textContent = t("security.mfa_disabled");
   });
 
   els.btnLogout.addEventListener("click", async () => {
@@ -1561,7 +1578,7 @@
         els.loginMfaField.classList.remove("hidden");
         els.loginTotp.focus();
       }
-      els.loginError.textContent = err.message || "Sign in failed";
+      els.loginError.textContent = err.message || t("login.failed");
       els.loginError.classList.remove("hidden");
     }
   });
@@ -1573,6 +1590,23 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+
+  window.addEventListener("agentic:langchange", () => {
+    updateHighFpsButtons();
+    updateAudioButtons();
+    if (appBooted) {
+      renderAll();
+      renderConfiguredKeys();
+      refreshStatus();
+      refreshAuthStatus().catch(() => {});
+      if (!els.tabPanelMemory.classList.contains("hidden")) {
+        loadAppMemory().catch(() => {});
+      }
+      if (state.config) {
+        populateDefaultModels(els.cfgDefaultProvider.value, els.cfgDefaultModel.value);
+      }
+    }
+  });
 
   async function bootApp() {
     if (appBooted) return;
@@ -1589,6 +1623,9 @@
   }
 
   async function init() {
+    if (window.I18n) {
+      await window.I18n.init();
+    }
     const authSt = await api("/api/auth/status");
     if (authSt.auth_enabled && !authSt.authenticated) {
       showLoginScreen(authSt.mfa_enabled);

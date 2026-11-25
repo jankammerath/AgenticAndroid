@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Agentic Android</string>
+    <string name="launcher_name">Agentic</string>
+    <string name="accessibility_service_label">Agentic Android Steuerung</string>
+    <string name="accessibility_service_description">Ermöglicht dem Agentic Android Rust-Kern und Ihrem konfigurierten KI-Agenten, den Bildschirm zu sehen sowie Tippen, Wischen, Texteingaben und Navigationsaktionen auszuführen.</string>
+
+    <string name="subtitle_controller">Minimaler Webserver-Controller (Rust-Kern)</string>
+    <string name="label_webserver_port">Webserver-Port</string>
+    <string name="btn_start_server">Server starten</string>
+    <string name="btn_stop_server">Server stoppen</string>
+    <string name="status_server_running">Server: Läuft (Rust-NDK-Kern)</string>
+    <string name="status_server_stopped">Server: Gestoppt</string>
+    <string name="status_server_url">Web-UI: http://%1$s:%2$d\n(Emulator per adb forward: http://localhost:%2$d)</string>
+
+    <string name="section_permissions_streaming">Berechtigungen &amp; Streaming</string>
+    <string name="status_accessibility_active">Bedienungshilfe: Aktiv</string>
+    <string name="status_accessibility_disabled">Bedienungshilfe: Deaktiviert</string>
+    <string name="btn_enable_accessibility">Bedienungshilfe aktivieren</string>
+    <string name="status_cast_active">Medienübertragung: Aktiv (High-FPS Video + Audio)</string>
+    <string name="status_cast_fallback">Medienübertragung: Fallback (Bedienungshilfe-Screenshots)</string>
+    <string name="btn_start_media_cast">High-FPS Bildschirm- &amp; Audio-Übertragung starten</string>
+    <string name="footer_web_ui_hint">Alle KI-Schlüssel, Sitzungen, Chats und Gerätesteuerungen werden über die vom Rust-Kern bereitgestellte Web-UI verwaltet.</string>
+
+    <string name="notification_channel_name">Agentic Android Server</string>
+    <string name="notification_title">Agentic Android läuft</string>
+    <string name="notification_text">Web-UI aktiv auf Port %1$d</string>
+</resources>

@@ -34,7 +34,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Agentic Android"
+                    android:text="@string/app_name"
                     android:textColor="#E6EDF3"
                     android:textSize="22sp"
                     android:textStyle="bold" />
@@ -43,7 +43,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Minimal Webserver Controller (Rust Core)"
+                    android:text="@string/subtitle_controller"
                     android:textColor="#8B949E"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -60,7 +60,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Webserver Port"
+                android:text="@string/label_webserver_port"
                 android:textColor="#8B949E"
                 android:textSize="12sp" />
 
@@ -89,7 +89,7 @@
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
                     android:backgroundTint="#3B82F6"
-                    android:text="Start Server"
+                    android:text="@string/btn_start_server"
                     android:textColor="#FFFFFF" />
 
                 <Button
@@ -99,7 +99,7 @@
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:backgroundTint="#30363D"
-                    android:text="Stop Server"
+                    android:text="@string/btn_stop_server"
                     android:textColor="#E6EDF3" />
             </LinearLayout>
 
@@ -108,7 +108,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Server: Stopped"
+                android:text="@string/status_server_stopped"
                 android:textColor="#F59E0B"
                 android:textSize="14sp" />
 
@@ -133,7 +133,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Permissions &amp; Streaming"
+                android:text="@string/section_permissions_streaming"
                 android:textColor="#E6EDF3"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -143,7 +143,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Accessibility Service: Disabled"
+                android:text="@string/status_accessibility_disabled"
                 android:textColor="#F59E0B"
                 android:textSize="13sp" />
 
@@ -153,7 +153,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:backgroundTint="#1F2630"
-                android:text="Enable Accessibility Service"
+                android:text="@string/btn_enable_accessibility"
                 android:textColor="#E6EDF3" />
 
             <TextView
@@ -161,7 +161,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Media Cast: Fallback (Accessibility Screenshots)"
+                android:text="@string/status_cast_fallback"
                 android:textColor="#8B949E"
                 android:textSize="13sp" />
 
@@ -171,7 +171,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:backgroundTint="#1F2630"
-                android:text="Start High-FPS Screen &amp; Audio Cast"
+                android:text="@string/btn_start_media_cast"
                 android:textColor="#E6EDF3" />
         </LinearLayout>
 
@@ -179,7 +179,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="All AI keys, sessions, chat, and device controls are managed through the Web UI served by the Rust core."
+            android:text="@string/footer_web_ui_hint"
             android:textColor="#8B949E"
             android:textSize="12sp" />
     </LinearLayout>

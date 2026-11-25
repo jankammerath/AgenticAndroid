@@ -1,5 +1,7 @@
 # Agentic Android
 
+**English** · [Deutsch](README.de.md) · [简体中文](README.zh-CN.md)
+
 <p align="left">
   <a href="https://github.com/jankammerath/AgenticAndroid/releases/latest/download/AgenticAndroid.apk">
     <img src="https://img.shields.io/badge/Download_APK-Android-3b82f6?style=for-the-badge&logo=android&logoColor=white" alt="Download Agentic Android APK" /></a>
