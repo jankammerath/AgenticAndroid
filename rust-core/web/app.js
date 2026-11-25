@@ -1605,7 +1605,13 @@
 
   const setSelectedApk = (file) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".apk")) {
+    const lower = file.name.toLowerCase();
+    const valid =
+      lower.endsWith(".apk") ||
+      lower.endsWith(".xapk") ||
+      lower.endsWith(".apks") ||
+      lower.endsWith(".apkm");
+    if (!valid) {
       els.apkStatus.textContent = t("apk.invalid_file");
       els.apkStatus.className = "apk-status err";
       return;

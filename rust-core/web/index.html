@@ -597,11 +597,11 @@
         <button class="ghost-icon-btn" id="btn-close-apk">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" data-i18n="apk.desc">Upload an Android .apk file to sideload onto the device. The Android installer prompt will appear on the Live Screen.</p>
+        <p class="modal-desc" data-i18n="apk.desc">Upload an Android .apk or .xapk file to sideload onto the device. The Android installer prompt will appear on the Live Screen.</p>
         <label class="apk-dropzone" id="apk-dropzone" for="apk-file-input">
-          <input type="file" id="apk-file-input" accept=".apk,application/vnd.android.package-archive" hidden />
+          <input type="file" id="apk-file-input" accept=".apk,.xapk,.apks,.apkm,application/vnd.android.package-archive,application/octet-stream,application/zip" hidden />
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span id="apk-dropzone-label" data-i18n="apk.drop_hint">Drop .apk file here or click to browse</span>
+          <span id="apk-dropzone-label" data-i18n="apk.drop_hint">Drop .apk / .xapk file here or click to browse</span>
           <small id="apk-file-meta"></small>
         </label>
         <div class="apk-progress-wrap hidden" id="apk-progress-wrap">

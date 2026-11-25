@@ -71,7 +71,7 @@ pub async fn start_http_server(
         .route("/api/device/action", post(api_device_action))
         .route(
             "/api/device/install-apk",
-            post(api_install_apk).layer(DefaultBodyLimit::max(256 * 1024 * 1024)),
+            post(api_install_apk).layer(DefaultBodyLimit::max(512 * 1024 * 1024)),
         )
         .route("/api/device/ui-tree", get(api_ui_tree))
         .route("/api/device/screenshot", get(api_screenshot))
@@ -1077,7 +1077,7 @@ async fn api_install_apk(
     if body.len() < 4 || &body[0..4] != b"PK\x03\x04" {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ "ok": false, "error": "Invalid APK file (expected Android .apk archive)." })),
+            Json(json!({ "ok": false, "error": "Invalid package file (expected Android .apk or .xapk archive)." })),
         )
             .into_response();
     }
@@ -1093,7 +1093,12 @@ async fn api_install_apk(
     if clean.is_empty() || clean.starts_with('.') {
         clean = "sideload.apk".to_string();
     }
-    if !clean.to_lowercase().ends_with(".apk") {
+    let lower = clean.to_lowercase();
+    if !lower.ends_with(".apk")
+        && !lower.ends_with(".xapk")
+        && !lower.ends_with(".apks")
+        && !lower.ends_with(".apkm")
+    {
         clean.push_str(".apk");
     }
 
