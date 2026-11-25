@@ -22,6 +22,7 @@
 html, body {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -35,10 +36,33 @@ html, body {
 
 .app-shell {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* iOS Home Screen PWA (standalone + black-translucent): 100% and bottom:0 stop
+   short by the status-bar height (~59px), whereas 100vh covers the full screen. */
+@media all and (display-mode: standalone) {
+  html, body {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .app-shell,
+  .modal-backdrop,
+  .login-overlay {
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    height: 100vh;
+  }
 }
 
 .mobile-only {
@@ -1514,7 +1538,7 @@ html, body {
     flex-direction: column;
     padding: 0;
     gap: 0;
-    position: relative;
+    position: static;
     overflow: hidden;
   }
 
@@ -1525,7 +1549,7 @@ html, body {
     height: 100%;
     background: var(--bg);
     border-radius: 0;
-    padding: 2px 6px 56px;
+    padding: 2px 6px calc(54px + env(safe-area-inset-bottom));
     gap: 0;
     overflow: hidden;
   }
@@ -1541,7 +1565,7 @@ html, body {
   /* Top-right floating Device Controls popover */
   .device-controls {
     display: none;
-    position: fixed;
+    position: absolute;
     top: calc(56px + env(safe-area-inset-top));
     right: 12px;
     width: 288px;
@@ -1606,7 +1630,7 @@ html, body {
 
   /* Left slide-out hamburger drawer (Sessions + Topbar controls) */
   .sidebar {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
     bottom: 0;
@@ -1663,7 +1687,7 @@ html, body {
   /* Backdrop behind open drawers/popovers */
   .mobile-backdrop {
     display: block;
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: rgba(5, 7, 11, 0.55);
     backdrop-filter: blur(3px);
@@ -1672,10 +1696,10 @@ html, body {
 
   /* Bottom-center collapsible Chat sheet */
   .chat-pane {
-    position: fixed;
+    position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: max(10px, calc(env(safe-area-inset-bottom) - 10px));
+    bottom: max(12px, env(safe-area-inset-bottom));
     width: 148px;
     height: 38px;
     border-radius: 999px;
@@ -1703,7 +1727,7 @@ html, body {
     width: 100%;
     height: 82%;
     border-radius: 22px 22px 0 0;
-    padding-bottom: max(8px, calc(env(safe-area-inset-bottom) - 10px));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
     background: var(--surface);
     box-shadow:
       0 -16px 48px rgba(0, 0, 0, 0.72),
