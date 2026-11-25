@@ -190,5 +190,24 @@
   "apk.launching": "Opening Android installer...",
   "apk.launched": "Installer opened on device — tap Install on the Live Screen.",
   "apk.needs_permission": "Enable 'Allow from this source' on the Live Screen, then upload again.",
-  "apk.upload_failed": "Upload failed. Check your connection and try again."
+  "apk.upload_failed": "Upload failed. Check your connection and try again.",
+
+  "emulator.tab": "Emulator",
+  "emulator.status_title": "Managed Android Emulator",
+  "emulator.restart": "Restart Emulator",
+  "emulator.restarting": "Restarting emulator...",
+  "emulator.active": "active",
+  "emulator.installed": "installed",
+  "emulator.switch_title": "Switch AVD",
+  "emulator.switch_desc": "Select an installed Android Virtual Device and restart the emulator with it.",
+  "emulator.switch_btn": "Switch & Restart",
+  "emulator.switching": "Switching to {avd} and restarting...",
+  "emulator.create_title": "Download & Create New AVD",
+  "emulator.create_desc": "Download a system image via sdkmanager and create a new AVD (non-Play Store google_apis images are recommended).",
+  "emulator.new_name": "AVD Name",
+  "emulator.new_device": "Device Profile",
+  "emulator.new_image": "System Image",
+  "emulator.switch_after": "Switch to the new AVD and restart automatically",
+  "emulator.create_btn": "Download & Create AVD",
+  "emulator.downloading": "Downloading system image & creating AVD..."
 }

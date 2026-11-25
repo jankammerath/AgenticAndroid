@@ -118,6 +118,20 @@
     btnDeleteCredential: document.getElementById("btn-delete-credential"),
     tabPanelTelegram: document.getElementById("tab-panel-telegram"),
     tabPanelSecurity: document.getElementById("tab-panel-security"),
+    tabBtnEmulator: document.getElementById("tab-btn-emulator"),
+    tabPanelEmulator: document.getElementById("tab-panel-emulator"),
+    emuCurrentAvd: document.getElementById("emu-current-avd"),
+    emuMetaDesc: document.getElementById("emu-meta-desc"),
+    btnEmuRestart: document.getElementById("btn-emu-restart"),
+    emuAvdSelect: document.getElementById("emu-avd-select"),
+    btnEmuSwitch: document.getElementById("btn-emu-switch"),
+    emuCreateForm: document.getElementById("emu-create-form"),
+    emuNewName: document.getElementById("emu-new-name"),
+    emuNewDevice: document.getElementById("emu-new-device"),
+    emuNewImage: document.getElementById("emu-new-image"),
+    emuNewSwitch: document.getElementById("emu-new-switch"),
+    btnEmuCreate: document.getElementById("btn-emu-create"),
+    emuMsg: document.getElementById("emu-msg"),
     tgStatusBadge: document.getElementById("tg-status-badge"),
     tgEnabled: document.getElementById("tg-enabled"),
     tgBotToken: document.getElementById("tg-bot-token"),
@@ -1753,12 +1767,15 @@
     els.tabPanelPrompt.classList.toggle("hidden", tabName !== "prompt");
     els.tabPanelTelegram.classList.toggle("hidden", tabName !== "telegram");
     els.tabPanelSecurity.classList.toggle("hidden", tabName !== "security");
+    els.tabPanelEmulator.classList.toggle("hidden", tabName !== "emulator");
     if (tabName === "models") {
       fetchDefaultModels(els.cfgDefaultProvider.value, state.config?.default_model);
     } else if (tabName === "telegram") {
       loadConfig();
     } else if (tabName === "security") {
       refreshAuthStatus();
+    } else if (tabName === "emulator") {
+      loadEmulatorConfig();
     }
   };
 
@@ -2092,6 +2109,107 @@
     els.secMsg.textContent = t("security.mfa_disabled");
   });
 
+  // Managed Emulator Config (/emulator-config)
+  let emuPollTimer = null;
+
+  async function loadEmulatorConfig() {
+    try {
+      const data = await api("/emulator-config");
+      const managed = !!data?.managed;
+      els.tabBtnEmulator.classList.toggle("hidden", !managed);
+      if (!managed) return;
+
+      els.emuCurrentAvd.textContent = data.current_avd || "--";
+      els.emuMetaDesc.textContent = `ABI: ${data.abi || "--"} · GPU: ${data.gpu || "--"}${data.task_status ? ` · ${data.task_status}` : ""}`;
+
+      const prevAvd = els.emuAvdSelect.value;
+      els.emuAvdSelect.innerHTML = "";
+      for (const avd of data.avds || []) {
+        const opt = document.createElement("option");
+        opt.value = avd;
+        opt.textContent = avd === data.current_avd ? `${avd} (${t("emulator.active")})` : avd;
+        if (avd === (prevAvd || data.current_avd)) opt.selected = true;
+        els.emuAvdSelect.appendChild(opt);
+      }
+
+      const prevImg = els.emuNewImage.value;
+      const installedSet = new Set(data.installed_images || []);
+      const allImgs = Array.from(
+        new Set([...(data.available_images || []), ...(data.installed_images || [])])
+      );
+      els.emuNewImage.innerHTML = "";
+      for (const img of allImgs) {
+        const opt = document.createElement("option");
+        opt.value = img;
+        opt.textContent = installedSet.has(img) ? `${img} (${t("emulator.installed")})` : img;
+        if (img === prevImg) opt.selected = true;
+        els.emuNewImage.appendChild(opt);
+      }
+
+      const busy = !!data.busy;
+      els.btnEmuRestart.disabled = busy;
+      els.btnEmuSwitch.disabled = busy;
+      els.btnEmuCreate.disabled = busy;
+      if (data.task_status) {
+        els.emuMsg.textContent = data.task_status;
+      }
+
+      if (busy && !emuPollTimer) {
+        emuPollTimer = setInterval(loadEmulatorConfig, 3000);
+      } else if (!busy && emuPollTimer) {
+        clearInterval(emuPollTimer);
+        emuPollTimer = null;
+      }
+    } catch {
+      els.tabBtnEmulator.classList.add("hidden");
+    }
+  }
+
+  els.btnEmuRestart.addEventListener("click", async () => {
+    els.emuMsg.textContent = t("emulator.restarting");
+    try {
+      await api("/emulator-config/restart", { method: "POST", body: JSON.stringify({}) });
+      setTimeout(loadEmulatorConfig, 1500);
+    } catch (err) {
+      els.emuMsg.textContent = err.message;
+    }
+  });
+
+  els.btnEmuSwitch.addEventListener("click", async () => {
+    const avd = els.emuAvdSelect.value;
+    if (!avd) return;
+    els.emuMsg.textContent = t("emulator.switching", { avd });
+    try {
+      await api("/emulator-config/switch-avd", {
+        method: "POST",
+        body: JSON.stringify({ avd }),
+      });
+      setTimeout(loadEmulatorConfig, 1500);
+    } catch (err) {
+      els.emuMsg.textContent = err.message;
+    }
+  });
+
+  els.emuCreateForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = els.emuNewName.value.trim();
+    const system_image = els.emuNewImage.value;
+    const device = els.emuNewDevice.value;
+    const switch_now = els.emuNewSwitch.checked;
+    if (!name || !system_image) return;
+    els.emuMsg.textContent = t("emulator.downloading");
+    try {
+      await api("/emulator-config/create-avd", {
+        method: "POST",
+        body: JSON.stringify({ name, system_image, device, switch_now }),
+      });
+      els.emuNewName.value = "";
+      loadEmulatorConfig();
+    } catch (err) {
+      els.emuMsg.textContent = err.message;
+    }
+  });
+
   els.btnLogout.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
     const st = await api("/api/auth/status");
@@ -2158,7 +2276,7 @@
     const pData = await api("/api/providers");
     state.providers = pData.providers || [];
     await loadConfig();
-    await Promise.all([loadSessions(), loadAppMemory(), loadCredentials()]);
+    await Promise.all([loadSessions(), loadAppMemory(), loadCredentials(), loadEmulatorConfig()]);
     await refreshStatus();
     statusInterval = setInterval(refreshStatus, 5000);
     connectVideoWs();

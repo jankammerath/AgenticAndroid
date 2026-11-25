@@ -273,6 +273,10 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               <span data-i18n="settings.tab_security">Security</span>
             </button>
+            <button type="button" class="tab-btn hidden" id="tab-btn-emulator" data-tab="emulator" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <span data-i18n="emulator.tab">Emulator</span>
+            </button>
           </div>
 
           <!-- Tab 1: Agent Keys -->
@@ -481,6 +485,64 @@
             <div class="modal-footer">
               <span class="save-msg" id="sec-msg"></span>
             </div>
+          </div>
+
+          <!-- Tab 6: Emulator Management (only visible when attached to systemd/supervisor) -->
+          <div class="modal-body tab-panel hidden" id="tab-panel-emulator">
+            <div class="security-card">
+              <div class="security-card-head">
+                <div>
+                  <h3 data-i18n="emulator.status_title">Managed Android Emulator</h3>
+                  <p class="modal-desc" id="emu-meta-desc"></p>
+                </div>
+                <span class="status-pill ok" id="emu-current-badge"><span class="dot"></span><span class="label" id="emu-current-avd">--</span></span>
+              </div>
+              <div class="security-actions">
+                <button type="button" class="pill-btn pill-btn-danger" id="btn-emu-restart" data-i18n="emulator.restart">Restart Emulator</button>
+              </div>
+            </div>
+
+            <div class="security-card">
+              <h3 data-i18n="emulator.switch_title">Switch AVD</h3>
+              <p class="modal-desc" data-i18n="emulator.switch_desc">Select an installed Android Virtual Device and restart the emulator with it.</p>
+              <div class="add-key-row">
+                <select id="emu-avd-select" aria-label="AVD"></select>
+                <button type="button" class="send-btn" id="btn-emu-switch" data-i18n="emulator.switch_btn">Switch &amp; Restart</button>
+              </div>
+            </div>
+
+            <form class="security-card" id="emu-create-form">
+              <h3 data-i18n="emulator.create_title">Download &amp; Create New AVD</h3>
+              <p class="modal-desc" data-i18n="emulator.create_desc">Download a system image via sdkmanager and create a new AVD (non-Play Store google_apis images are recommended).</p>
+              <div class="settings-row settings-row-2">
+                <div class="field">
+                  <label for="emu-new-name" data-i18n="emulator.new_name">AVD Name</label>
+                  <input type="text" id="emu-new-name" placeholder="e.g. android35_gapis" required />
+                </div>
+                <div class="field">
+                  <label for="emu-new-device" data-i18n="emulator.new_device">Device Profile</label>
+                  <select id="emu-new-device">
+                    <option value="pixel_6">Pixel 6</option>
+                    <option value="pixel_7">Pixel 7</option>
+                    <option value="pixel_8">Pixel 8</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="emu-new-image" data-i18n="emulator.new_image">System Image</label>
+                <select id="emu-new-image"></select>
+              </div>
+              <div class="field checkbox-field">
+                <label>
+                  <input type="checkbox" id="emu-new-switch" checked />
+                  <span data-i18n="emulator.switch_after">Switch to the new AVD and restart automatically</span>
+                </label>
+              </div>
+              <div class="modal-footer">
+                <span class="save-msg" id="emu-msg"></span>
+                <button type="submit" class="send-btn" id="btn-emu-create" data-i18n="emulator.create_btn">Download &amp; Create AVD</button>
+              </div>
+            </form>
           </div>
         </div>
       </section>

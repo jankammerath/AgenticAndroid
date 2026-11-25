@@ -2,12 +2,12 @@ use clap::{Args, Parser, Subcommand};
 use serde::Deserialize;
 use std::env;
 use std::fs::{self, OpenOptions};
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -125,9 +125,13 @@ struct RunOpts {
     #[arg(short, long)]
     daemon: bool,
 
-    /// Keep running in foreground as a supervisor (used internally by daemon & systemd)
+    /// Keep running in foreground as a supervisor (default true; pass --no-supervise to exit after launch)
     #[arg(long)]
     supervise: bool,
+
+    /// Exit immediately after launching without staying attached as supervisor / emulator controller
+    #[arg(long)]
+    no_supervise: bool,
 
     /// Path to TOML config file (default: ~/.agentic-android/config.toml if present)
     #[arg(short, long, env = "AGENTIC_CONFIG")]
@@ -182,6 +186,7 @@ struct EffectiveConfig {
     gpu: Option<String>,
     build_only: bool,
     supervise: bool,
+    config_path: Option<PathBuf>,
     project_root: PathBuf,
     state_dir: PathBuf,
     android_home: PathBuf,
@@ -347,7 +352,7 @@ fn load_config(opts: &RunOpts) -> Result<EffectiveConfig, String> {
         .clone()
         .or_else(|| default_cfg_path.exists().then_some(default_cfg_path));
 
-    let file_cfg: FileConfig = if let Some(path) = cfg_path {
+    let file_cfg: FileConfig = if let Some(ref path) = cfg_path {
         let raw = fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read config {}: {e}", path.display()))?;
         toml::from_str(&raw)
@@ -378,7 +383,8 @@ fn load_config(opts: &RunOpts) -> Result<EffectiveConfig, String> {
         headless: opts.headless || file_cfg.headless.unwrap_or(false),
         gpu: opts.gpu.clone().or(file_cfg.gpu),
         build_only: opts.build_only,
-        supervise: opts.supervise,
+        supervise: !opts.no_supervise,
+        config_path: cfg_path,
         project_root: detect_project_root(opts.project_root.clone().or(file_cfg.project_root)),
         state_dir: opts
             .state_dir
@@ -736,7 +742,7 @@ fn create_avd(cfg: &EffectiveConfig, avd_name: &str) -> Result<String, String> {
     Ok(avd_name.to_string())
 }
 
-fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, String> {
+fn list_installed_system_images(android_home: &Path, abi: &str) -> Vec<String> {
     let base = android_home.join("system-images");
     let mut found = Vec::new();
     if let Ok(apis) = fs::read_dir(&base) {
@@ -757,18 +763,31 @@ fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, S
         }
     }
     found.sort();
-    // Prefer Google Play Store system images when available
-    if let Some(play) = found
+    found
+}
+
+fn find_system_image_package(android_home: &Path, abi: &str) -> Result<String, String> {
+    let mut found = list_installed_system_images(android_home, abi);
+    // Prefer non-Play Store Google APIs system images by default
+    if let Some(gapis) = found
         .iter()
         .rev()
-        .find(|pkg| pkg.contains(";google_apis_playstore;"))
+        .find(|pkg| pkg.contains(";google_apis;"))
         .cloned()
     {
-        return Ok(play);
+        return Ok(gapis);
+    }
+    if let Some(default_img) = found
+        .iter()
+        .rev()
+        .find(|pkg| pkg.contains(";default;"))
+        .cloned()
+    {
+        return Ok(default_img);
     }
     found
         .pop()
-        .ok_or_else(|| format!("No Android system image found for ABI '{abi}' in {}", base.display()))
+        .ok_or_else(|| format!("No Android system image found for ABI '{abi}' in {}/system-images", android_home.display()))
 }
 
 fn cleanup_stale_avd_locks(avd_name: &str) {
@@ -1332,6 +1351,399 @@ fn wait_for_health(port: u16, timeout_secs: u64) -> bool {
     false
 }
 
+#[derive(Debug, Clone)]
+enum SupervisorCmd {
+    Restart,
+    SwitchAvd(String),
+}
+
+struct ControlState {
+    cfg: EffectiveConfig,
+    backup_secret: String,
+    current_avd: Mutex<String>,
+    pending_cmd: Mutex<Option<SupervisorCmd>>,
+    busy: AtomicBool,
+    task_status: Mutex<String>,
+}
+
+fn sdkmanager_bin(android_home: &Path) -> PathBuf {
+    let latest = android_home.join("cmdline-tools/latest/bin/sdkmanager");
+    if latest.exists() {
+        return latest;
+    }
+    android_home.join("cmdline-tools/bin/sdkmanager")
+}
+
+fn update_config_file_avd(cfg_path: &Option<PathBuf>, new_avd: &str) {
+    let Some(path) = cfg_path else {
+        return;
+    };
+    let Ok(content) = fs::read_to_string(path) else {
+        return;
+    };
+    let mut found = false;
+    let mut lines: Vec<String> = content
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("avd") && trimmed[3..].trim_start().starts_with('=') {
+                found = true;
+                format!("avd = \"{new_avd}\"")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect();
+    if !found {
+        lines.push(format!("avd = \"{new_avd}\""));
+    }
+    let _ = fs::write(path, lines.join("\n") + "\n");
+}
+
+fn write_http_json(stream: &mut TcpStream, status: &str, body: &serde_json::Value) {
+    let payload = body.to_string();
+    let resp = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        payload.len(),
+        payload
+    );
+    let _ = stream.write_all(resp.as_bytes());
+    let _ = stream.flush();
+}
+
+fn handle_control_connection(mut stream: TcpStream, ctrl: Arc<ControlState>) {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let mut reader = BufReader::new(match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => return,
+    });
+    let mut req_line = String::new();
+    if reader.read_line(&mut req_line).is_err() || req_line.trim().is_empty() {
+        return;
+    }
+    let mut parts = req_line.split_whitespace();
+    let method = parts.next().unwrap_or("");
+    let path = parts.next().unwrap_or("");
+
+    let mut content_len: usize = 0;
+    let mut provided_secret = String::new();
+    loop {
+        let mut h = String::new();
+        if reader.read_line(&mut h).unwrap_or(0) == 0 {
+            break;
+        }
+        let trimmed = h.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((k, v)) = trimmed.split_once(':') {
+            let kl = k.trim().to_ascii_lowercase();
+            if kl == "content-length" {
+                content_len = v.trim().parse().unwrap_or(0).min(1024 * 1024);
+            } else if kl == "x-backup-secret" {
+                provided_secret = v.trim().to_string();
+            }
+        }
+    }
+
+    if provided_secret.is_empty() || provided_secret != ctrl.backup_secret {
+        write_http_json(
+            &mut stream,
+            "401 Unauthorized",
+            &serde_json::json!({ "ok": false, "error": "Unauthorized" }),
+        );
+        return;
+    }
+
+    let mut body_buf = vec![0u8; content_len];
+    if content_len > 0 && reader.read_exact(&mut body_buf).is_err() {
+        write_http_json(
+            &mut stream,
+            "400 Bad Request",
+            &serde_json::json!({ "ok": false, "error": "Failed to read body" }),
+        );
+        return;
+    }
+    let body_json: serde_json::Value = if content_len > 0 {
+        serde_json::from_slice(&body_buf).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let clean_path = path.split('?').next().unwrap_or(path);
+    match (method, clean_path) {
+        ("GET", "/emulator-config") | ("GET", "/emulator-config/status") => {
+            let avds = list_avds(&ctrl.cfg.android_home).unwrap_or_default();
+            let installed = list_installed_system_images(&ctrl.cfg.android_home, &ctrl.cfg.abi);
+            let abi = &ctrl.cfg.abi;
+            let available = vec![
+                format!("system-images;android-35;google_apis;{abi}"),
+                format!("system-images;android-34;google_apis;{abi}"),
+                format!("system-images;android-33;google_apis;{abi}"),
+                format!("system-images;android-35;google_apis_playstore;{abi}"),
+                format!("system-images;android-34;google_apis_playstore;{abi}"),
+            ];
+            let current_avd = ctrl.current_avd.lock().unwrap().clone();
+            let task_status = ctrl.task_status.lock().unwrap().clone();
+            let gpu = ctrl
+                .cfg
+                .gpu
+                .clone()
+                .unwrap_or_else(|| "swiftshader_indirect".to_string());
+            write_http_json(
+                &mut stream,
+                "200 OK",
+                &serde_json::json!({
+                    "ok": true,
+                    "managed": true,
+                    "current_avd": current_avd,
+                    "avds": avds,
+                    "installed_images": installed,
+                    "available_images": available,
+                    "abi": abi,
+                    "gpu": gpu,
+                    "headless": ctrl.cfg.headless,
+                    "busy": ctrl.busy.load(Ordering::SeqCst),
+                    "task_status": task_status
+                }),
+            );
+        }
+        ("POST", "/emulator-config/restart") => {
+            if ctrl.busy.swap(true, Ordering::SeqCst) {
+                write_http_json(
+                    &mut stream,
+                    "409 Conflict",
+                    &serde_json::json!({ "ok": false, "error": "Another emulator operation is already in progress." }),
+                );
+                return;
+            }
+            *ctrl.task_status.lock().unwrap() = "Restarting emulator...".to_string();
+            *ctrl.pending_cmd.lock().unwrap() = Some(SupervisorCmd::Restart);
+            write_http_json(
+                &mut stream,
+                "200 OK",
+                &serde_json::json!({ "ok": true, "message": "Emulator restart scheduled." }),
+            );
+        }
+        ("POST", "/emulator-config/switch-avd") => {
+            let avd = body_json["avd"].as_str().unwrap_or("").trim().to_string();
+            let avds = list_avds(&ctrl.cfg.android_home).unwrap_or_default();
+            if avd.is_empty() || !avds.iter().any(|a| a == &avd) {
+                write_http_json(
+                    &mut stream,
+                    "400 Bad Request",
+                    &serde_json::json!({ "ok": false, "error": format!("AVD '{avd}' not found.") }),
+                );
+                return;
+            }
+            if ctrl.busy.swap(true, Ordering::SeqCst) {
+                write_http_json(
+                    &mut stream,
+                    "409 Conflict",
+                    &serde_json::json!({ "ok": false, "error": "Another emulator operation is already in progress." }),
+                );
+                return;
+            }
+            update_config_file_avd(&ctrl.cfg.config_path, &avd);
+            *ctrl.task_status.lock().unwrap() = format!("Switching to AVD '{avd}'...");
+            *ctrl.pending_cmd.lock().unwrap() = Some(SupervisorCmd::SwitchAvd(avd.clone()));
+            write_http_json(
+                &mut stream,
+                "200 OK",
+                &serde_json::json!({ "ok": true, "avd": avd, "message": "Switching AVD and restarting emulator." }),
+            );
+        }
+        ("POST", "/emulator-config/create-avd") => {
+            let name = body_json["name"].as_str().unwrap_or("").trim().to_string();
+            let system_image = body_json["system_image"]
+                .as_str()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let device = body_json["device"]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("pixel_6")
+                .trim()
+                .to_string();
+            let switch_now = body_json["switch_now"].as_bool().unwrap_or(true);
+
+            let valid_name = !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.');
+            let valid_img = system_image.starts_with("system-images;")
+                && system_image
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, ';' | '-' | '_' | '.'));
+
+            if !valid_name || !valid_img {
+                write_http_json(
+                    &mut stream,
+                    "400 Bad Request",
+                    &serde_json::json!({ "ok": false, "error": "Invalid AVD name or system image package." }),
+                );
+                return;
+            }
+            if ctrl.busy.swap(true, Ordering::SeqCst) {
+                write_http_json(
+                    &mut stream,
+                    "409 Conflict",
+                    &serde_json::json!({ "ok": false, "error": "Another emulator operation is already in progress." }),
+                );
+                return;
+            }
+
+            *ctrl.task_status.lock().unwrap() = format!("Downloading {system_image}...");
+            let ctrl_bg = ctrl.clone();
+            let name_bg = name.clone();
+            thread::spawn(move || {
+                let sdkmgr = sdkmanager_bin(&ctrl_bg.cfg.android_home);
+                let sdk_root = format!("--sdk_root={}", ctrl_bg.cfg.android_home.display());
+                let dl = Command::new(&sdkmgr)
+                    .args([&sdk_root, &system_image])
+                    .env("ANDROID_HOME", &ctrl_bg.cfg.android_home)
+                    .env("ANDROID_SDK_ROOT", &ctrl_bg.cfg.android_home)
+                    .status();
+                match dl {
+                    Ok(s) if s.success() => {}
+                    _ => {
+                        *ctrl_bg.task_status.lock().unwrap() =
+                            format!("Failed to download {system_image}.");
+                        ctrl_bg.busy.store(false, Ordering::SeqCst);
+                        return;
+                    }
+                }
+
+                *ctrl_bg.task_status.lock().unwrap() = format!("Creating AVD '{name_bg}'...");
+                let mut child = match Command::new(avdmanager_bin(&ctrl_bg.cfg.android_home))
+                    .args([
+                        "create",
+                        "avd",
+                        "--force",
+                        "--name",
+                        &name_bg,
+                        "--package",
+                        &system_image,
+                        "--device",
+                        &device,
+                    ])
+                    .env("ANDROID_HOME", &ctrl_bg.cfg.android_home)
+                    .env("ANDROID_SDK_ROOT", &ctrl_bg.cfg.android_home)
+                    .stdin(Stdio::piped())
+                    .spawn()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        *ctrl_bg.task_status.lock().unwrap() =
+                            format!("Failed to launch avdmanager: {e}");
+                        ctrl_bg.busy.store(false, Ordering::SeqCst);
+                        return;
+                    }
+                };
+                if let Some(ref mut stdin) = child.stdin {
+                    let _ = stdin.write_all(b"no\n");
+                }
+                let ok = child.wait().map(|s| s.success()).unwrap_or(false);
+                if !ok {
+                    *ctrl_bg.task_status.lock().unwrap() =
+                        format!("Failed to create AVD '{name_bg}'.");
+                    ctrl_bg.busy.store(false, Ordering::SeqCst);
+                    return;
+                }
+
+                if switch_now {
+                    update_config_file_avd(&ctrl_bg.cfg.config_path, &name_bg);
+                    *ctrl_bg.task_status.lock().unwrap() =
+                        format!("Switching to new AVD '{name_bg}'...");
+                    *ctrl_bg.pending_cmd.lock().unwrap() = Some(SupervisorCmd::SwitchAvd(name_bg));
+                } else {
+                    *ctrl_bg.task_status.lock().unwrap() =
+                        format!("Created AVD '{name_bg}' successfully.");
+                    ctrl_bg.busy.store(false, Ordering::SeqCst);
+                }
+            });
+
+            write_http_json(
+                &mut stream,
+                "200 OK",
+                &serde_json::json!({ "ok": true, "name": name, "message": "Downloading system image & creating AVD in background." }),
+            );
+        }
+        _ => {
+            write_http_json(
+                &mut stream,
+                "404 Not Found",
+                &serde_json::json!({ "ok": false, "error": "Not found" }),
+            );
+        }
+    }
+}
+
+fn spawn_control_server(ctrl: Arc<ControlState>, running: Arc<AtomicBool>) {
+    let control_port = ctrl.cfg.port.saturating_add(1);
+    let addr = format!("127.0.0.1:{control_port}");
+    let Ok(listener) = TcpListener::bind(&addr) else {
+        eprintln!("WARNING: Could not bind emulator control server on {addr}");
+        return;
+    };
+    let _ = listener.set_nonblocking(true);
+    println!("==> Emulator control plane listening on http://{addr}/emulator-config");
+
+    thread::spawn(move || {
+        while running.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    let _ = stream.set_nonblocking(false);
+                    let c = ctrl.clone();
+                    thread::spawn(move || handle_control_connection(stream, c));
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(120));
+                }
+                Err(_) => {
+                    thread::sleep(Duration::from_millis(250));
+                }
+            }
+        }
+    });
+}
+
+fn detect_running_avd_name(android_home: &Path) -> Option<String> {
+    let out = Command::new(adb_bin(android_home))
+        .args(["emu", "avd", "name"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && *l != "OK")
+        .map(ToString::to_string)
+}
+
+fn stop_managed_emulator(cfg: &EffectiveConfig, emulator_child: &mut Option<Child>) {
+    let _ = Command::new(adb_bin(&cfg.android_home))
+        .args(["emu", "kill"])
+        .status();
+    if let Some(mut child) = emulator_child.take() {
+        let mut exited = false;
+        for _ in 0..30 {
+            if let Ok(Some(_)) = child.try_wait() {
+                exited = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(500));
+        }
+        if !exited {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 fn cmd_run(opts: RunOpts) -> Result<(), String> {
     let cfg = load_config(&opts)?;
 
@@ -1359,6 +1771,8 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         active_avd = Some(avd_name.clone());
         emulator_child = Some(spawn_emulator(&cfg, &avd_name)?);
         wait_for_emulator_boot(&cfg, emulator_child.as_mut(), 180)?;
+    } else if active_avd.is_none() {
+        active_avd = detect_running_avd_name(&cfg.android_home);
     }
 
     install_and_configure(&cfg, &apk_path)?;
@@ -1393,13 +1807,67 @@ fn cmd_run(opts: RunOpts) -> Result<(), String> {
         r.store(false, Ordering::SeqCst);
     });
 
+    let ctrl_state = Arc::new(ControlState {
+        cfg: cfg.clone(),
+        backup_secret: ensure_backup_secret(&cfg.state_dir),
+        current_avd: Mutex::new(active_avd.clone().unwrap_or_default()),
+        pending_cmd: Mutex::new(None),
+        busy: AtomicBool::new(false),
+        task_status: Mutex::new(String::new()),
+    });
+    spawn_control_server(ctrl_state.clone(), running.clone());
+
     println!("==> Supervisor active (checking health every 10s, Ctrl+C / SIGTERM to stop)...");
     let mut tick: u64 = 0;
     while running.load(Ordering::SeqCst) {
-        thread::sleep(Duration::from_secs(10));
+        // Sleep up to 10s in 1s increments so Web UI emulator commands respond immediately
+        let mut pending: Option<SupervisorCmd> = None;
+        for _ in 0..10 {
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
+            pending = ctrl_state.pending_cmd.lock().unwrap().take();
+            if pending.is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
         if !running.load(Ordering::SeqCst) {
             break;
         }
+
+        if let Some(cmd) = pending {
+            let target_avd = match cmd {
+                SupervisorCmd::Restart => active_avd.clone().unwrap_or_else(|| "agentic_android_avd".to_string()),
+                SupervisorCmd::SwitchAvd(new_avd) => new_avd,
+            };
+            println!("==> Executing emulator control command: switching/restarting AVD '{target_avd}'...");
+            pull_app_state_backup(&cfg);
+            stop_managed_emulator(&cfg, &mut emulator_child);
+            active_avd = Some(target_avd.clone());
+            *ctrl_state.current_avd.lock().unwrap() = target_avd.clone();
+
+            match spawn_emulator(&cfg, &target_avd) {
+                Ok(mut new_child) => {
+                    let _ = wait_for_emulator_boot(&cfg, Some(&mut new_child), 180);
+                    emulator_child = Some(new_child);
+                    if let Err(e) = install_and_configure(&cfg, &apk_path) {
+                        eprintln!("WARNING: install_and_configure after restart failed: {e}");
+                    } else if wait_for_health(cfg.port, 25) {
+                        restore_app_state_backup(&cfg);
+                        pull_app_state_backup(&cfg);
+                    }
+                    *ctrl_state.task_status.lock().unwrap() = String::new();
+                }
+                Err(e) => {
+                    eprintln!("ERROR: Failed to restart emulator '{target_avd}': {e}");
+                    *ctrl_state.task_status.lock().unwrap() = format!("Failed to start '{target_avd}': {e}");
+                }
+            }
+            ctrl_state.busy.store(false, Ordering::SeqCst);
+            continue;
+        }
+
         tick += 1;
         if tick % 6 == 0 {
             pull_app_state_backup(&cfg);

@@ -8,7 +8,7 @@ if [ -d "$HOME/.cargo/bin" ]; then
   export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-if [ ! -x "$CLI_BIN" ]; then
+if [ ! -x "$CLI_BIN" ] || [ "$ROOT_DIR/cli/src/main.rs" -nt "$CLI_BIN" ] || [ "$ROOT_DIR/cli/Cargo.toml" -nt "$CLI_BIN" ]; then
   cargo build --release --manifest-path "$ROOT_DIR/cli/Cargo.toml"
 fi
 

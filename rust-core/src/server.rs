@@ -96,6 +96,8 @@ pub async fn start_http_server(
         .route("/api/auth/mfa/setup", post(api_auth_mfa_setup))
         .route("/api/auth/mfa/enable", post(api_auth_mfa_enable))
         .route("/api/auth/mfa/disable", post(api_auth_mfa_disable))
+        .route("/emulator-config", get(api_emulator_config_get))
+        .route("/emulator-config/:action", get(api_emulator_config_action_get).post(api_emulator_config_action_post))
         .route("/ws/video", get(ws_video))
         .route("/ws/audio", get(ws_audio))
         .route("/ws/events", get(ws_events))
@@ -637,6 +639,68 @@ async fn api_internal_restore(
 
 async fn api_health() -> Json<Value> {
     Json(json!({ "ok": true, "service": "agentic-android-rust" }))
+}
+
+async fn proxy_emulator_control(
+    ctx: &ServerCtx,
+    method: reqwest::Method,
+    subpath: &str,
+    body: Option<Value>,
+) -> Response {
+    let Some(ref secret) = ctx.state.backup_secret else {
+        return Json(json!({ "ok": true, "managed": false })).into_response();
+    };
+    if secret.is_empty() {
+        return Json(json!({ "ok": true, "managed": false })).into_response();
+    }
+    let control_port = ctx.state.port.saturating_add(1);
+    let url = format!("http://10.0.2.2:{control_port}/emulator-config{subpath}");
+    let mut req = ctx
+        .state
+        .http_client
+        .request(method, &url)
+        .timeout(std::time::Duration::from_secs(5))
+        .header("X-Backup-Secret", secret);
+    if let Some(b) = body {
+        req = req.json(&b);
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16())
+                .unwrap_or(StatusCode::BAD_GATEWAY);
+            let val: Value = resp
+                .json()
+                .await
+                .unwrap_or_else(|_| json!({ "ok": false, "error": "Invalid response from host controller" }));
+            (status, Json(val)).into_response()
+        }
+        Err(_) => Json(json!({ "ok": true, "managed": false })).into_response(),
+    }
+}
+
+async fn api_emulator_config_get(State(ctx): State<ServerCtx>) -> Response {
+    proxy_emulator_control(&ctx, reqwest::Method::GET, "", None).await
+}
+
+async fn api_emulator_config_action_get(
+    State(ctx): State<ServerCtx>,
+    Path(action): Path<String>,
+) -> Response {
+    proxy_emulator_control(&ctx, reqwest::Method::GET, &format!("/{action}"), None).await
+}
+
+async fn api_emulator_config_action_post(
+    State(ctx): State<ServerCtx>,
+    Path(action): Path<String>,
+    body: Option<Json<Value>>,
+) -> Response {
+    proxy_emulator_control(
+        &ctx,
+        reqwest::Method::POST,
+        &format!("/{action}"),
+        body.map(|b| b.0),
+    )
+    .await
 }
 
 async fn api_status(State(ctx): State<ServerCtx>) -> Json<Value> {

@@ -190,5 +190,24 @@
   "apk.launching": "Öffne Android-Installer...",
   "apk.launched": "Installer auf dem Gerät geöffnet – tippe auf dem Live-Bildschirm auf Installieren.",
   "apk.needs_permission": "Aktiviere auf dem Live-Bildschirm 'Aus dieser Quelle zulassen' und lade erneut hoch.",
-  "apk.upload_failed": "Upload fehlgeschlagen. Prüfe die Verbindung und versuche es erneut."
+  "apk.upload_failed": "Upload fehlgeschlagen. Prüfe die Verbindung und versuche es erneut.",
+
+  "emulator.tab": "Emulator",
+  "emulator.status_title": "Verwalteter Android-Emulator",
+  "emulator.restart": "Emulator neu starten",
+  "emulator.restarting": "Starte Emulator neu...",
+  "emulator.active": "aktiv",
+  "emulator.installed": "installiert",
+  "emulator.switch_title": "AVD wechseln",
+  "emulator.switch_desc": "Wähle ein installiertes Android Virtual Device aus und starte den Emulator damit neu.",
+  "emulator.switch_btn": "Wechseln & Neu starten",
+  "emulator.switching": "Wechsle zu {avd} und starte neu...",
+  "emulator.create_title": "Neues AVD herunterladen & erstellen",
+  "emulator.create_desc": "Lade ein System-Image über sdkmanager herunter und erstelle ein neues AVD (google_apis ohne Play Store empfohlen).",
+  "emulator.new_name": "AVD-Name",
+  "emulator.new_device": "Geräteprofil",
+  "emulator.new_image": "System-Image",
+  "emulator.switch_after": "Nach Erstellung automatisch zum neuen AVD wechseln",
+  "emulator.create_btn": "Herunterladen & AVD erstellen",
+  "emulator.downloading": "Lade System-Image herunter & erstelle AVD..."
 }

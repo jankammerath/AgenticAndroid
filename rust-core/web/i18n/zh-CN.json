@@ -190,5 +190,24 @@
   "apk.launching": "正在打开 Android 安装程序...",
   "apk.launched": "已在设备上打开安装程序，请在实时屏幕上点击“安装”。",
   "apk.needs_permission": "请在实时屏幕上开启“允许来自此来源的应用”，然后重新上传。",
-  "apk.upload_failed": "上传失败，请检查网络连接后重试。"
+  "apk.upload_failed": "上传失败，请检查网络连接后重试。",
+
+  "emulator.tab": "模拟器",
+  "emulator.status_title": "托管 Android 模拟器",
+  "emulator.restart": "重启模拟器",
+  "emulator.restarting": "正在重启模拟器...",
+  "emulator.active": "当前",
+  "emulator.installed": "已安装",
+  "emulator.switch_title": "切换 AVD",
+  "emulator.switch_desc": "选择已安装的 Android 虚拟设备 (AVD) 并重启模拟器。",
+  "emulator.switch_btn": "切换并重启",
+  "emulator.switching": "正在切换到 {avd} 并重启...",
+  "emulator.create_title": "下载并创建新 AVD",
+  "emulator.create_desc": "通过 sdkmanager 下载系统镜像并创建新的 AVD（推荐使用无 Play 商店的 google_apis 镜像）。",
+  "emulator.new_name": "AVD 名称",
+  "emulator.new_device": "设备型号",
+  "emulator.new_image": "系统镜像",
+  "emulator.switch_after": "创建完成后自动切换到新 AVD 并重启",
+  "emulator.create_btn": "下载并创建 AVD",
+  "emulator.downloading": "正在下载系统镜像并创建 AVD..."
 }
