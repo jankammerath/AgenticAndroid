@@ -238,6 +238,249 @@
             </div>
           </form>
         </div>
+
+        <!-- View 4: Settings (in Center Tab) -->
+        <div class="center-view center-settings-view hidden" id="center-view-settings">
+          <div class="settings-center-head">
+            <h2 data-i18n="settings.title">Settings</h2>
+            <select class="lang-select" id="settings-lang-select" aria-label="Language" data-i18n-aria-label="settings.language">
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="zh-CN">简体中文</option>
+            </select>
+          </div>
+
+          <div class="modal-tabs" role="tablist">
+            <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></svg>
+              <span data-i18n="settings.tab_keys">Keys</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="models" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+              <span data-i18n="settings.tab_models">Models</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span data-i18n="settings.tab_prompt">Prompt</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="telegram" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <span data-i18n="settings.tab_telegram">Telegram</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="security" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span data-i18n="settings.tab_security">Security</span>
+            </button>
+          </div>
+
+          <!-- Tab 1: Agent Keys -->
+          <div class="modal-body tab-panel" id="tab-panel-keys">
+            <p class="modal-desc" data-i18n="keys.desc">
+              Manage API keys for AI providers. Switch provider and model per session directly from the prompt box.
+            </p>
+
+            <div class="keys-list" id="configured-keys-list"></div>
+
+            <form class="add-key-card" id="add-key-form">
+              <div class="add-key-row">
+                <select id="add-key-provider" aria-label="Provider">
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="gemini">Gemini (Google)</option>
+                  <option value="grok">Grok (xAI)</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+                <input type="password" id="add-key-input" placeholder="Paste API key..." data-i18n-placeholder="keys.placeholder" autocomplete="off" />
+                <button type="submit" class="send-btn" data-i18n="keys.add">Add Key</button>
+              </div>
+            </form>
+
+            <div class="modal-footer">
+              <span class="save-msg" id="keys-save-msg"></span>
+            </div>
+          </div>
+
+          <!-- Tab 2: Models & Agent Behavior -->
+          <form class="modal-body tab-panel hidden" id="tab-panel-models">
+            <p class="modal-desc" data-i18n="models.desc">
+              Choose the default provider and model used when creating new sessions, along with agent execution settings.
+            </p>
+
+            <div class="models-default-grid">
+              <div class="field">
+                <label for="cfg-default-provider" data-i18n="models.default_provider">Default Provider</label>
+                <select id="cfg-default-provider">
+                  <option value="claude">Claude (Anthropic)</option>
+                  <option value="gemini">Gemini (Google)</option>
+                  <option value="grok">Grok (xAI)</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="cfg-default-model"><span data-i18n="models.default_model">Default Model</span> <span class="model-source-hint" id="cfg-model-source-hint"></span></label>
+                <div class="default-model-row">
+                  <select id="cfg-default-model"></select>
+                  <button type="button" class="ghost-icon-btn" id="btn-refresh-default-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-row settings-row-2">
+              <div class="field">
+                <label for="cfg-max-steps" data-i18n="models.max_steps">Max Steps</label>
+                <input type="number" id="cfg-max-steps" min="1" max="1024" value="15" />
+              </div>
+              <div class="field">
+                <label for="cfg-step-delay" data-i18n="models.step_delay">Step Delay (ms)</label>
+                <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
+              </div>
+            </div>
+
+            <div class="field checkbox-field">
+              <label>
+                <input type="checkbox" id="cfg-include-screenshot" checked />
+                <span data-i18n="models.include_screenshot">Send live device screenshot with each agent step</span>
+              </label>
+            </div>
+
+            <div class="field checkbox-field">
+              <label>
+                <input type="checkbox" id="cfg-gemini-search" checked />
+                <span data-i18n="models.gemini_search">Enable Google Search grounding (Gemini models)</span>
+              </label>
+            </div>
+
+            <div class="field checkbox-field">
+              <label>
+                <input type="checkbox" id="cfg-gemini-maps" checked />
+                <span data-i18n="models.gemini_maps">Enable Google Maps grounding (Gemini models)</span>
+              </label>
+            </div>
+
+            <div class="field checkbox-field">
+              <label>
+                <input type="checkbox" id="cfg-notify-complete" checked />
+                <span data-i18n="models.notify_complete">Send notification when agent execution completes</span>
+              </label>
+            </div>
+
+            <div class="modal-footer">
+              <span class="save-msg" id="settings-save-msg"></span>
+              <button type="submit" class="send-btn" data-i18n="models.save">Save Settings</button>
+            </div>
+          </form>
+
+          <!-- Tab 3: System Prompt -->
+          <form class="modal-body tab-panel hidden" id="tab-panel-prompt">
+            <p class="modal-desc" data-i18n="prompt.desc">
+              Customize the system instructions given to the AI agent before it controls your Android device.
+            </p>
+            <div class="field prompt-field">
+              <label for="cfg-system-prompt" data-i18n="prompt.label">System Prompt</label>
+              <textarea id="cfg-system-prompt" rows="14" placeholder="Enter system prompt instructions..." data-i18n-placeholder="prompt.placeholder"></textarea>
+            </div>
+            <div class="modal-footer">
+              <span class="save-msg" id="prompt-save-msg"></span>
+              <button type="submit" class="send-btn" data-i18n="prompt.save">Save Prompt</button>
+            </div>
+          </form>
+
+          <!-- Tab 4: Telegram Bot -->
+          <form class="modal-body tab-panel hidden" id="tab-panel-telegram">
+            <div class="security-card">
+              <div class="security-card-head">
+                <div>
+                  <h3 data-i18n="telegram.title">Telegram Remote Control</h3>
+                  <p class="modal-desc" data-i18n="telegram.desc">Control this Android device from anywhere using a Telegram bot (create one with @BotFather).</p>
+                </div>
+                <span class="status-pill" id="tg-status-badge"><span class="dot"></span><span class="label" data-i18n="telegram.disabled">Disabled</span></span>
+              </div>
+
+              <div class="field checkbox-field">
+                <label>
+                  <input type="checkbox" id="tg-enabled" />
+                  <span data-i18n="telegram.enable">Enable Telegram Bot (long-polling, no port forwarding needed)</span>
+                </label>
+              </div>
+
+              <div class="field">
+                <label for="tg-bot-token"><span data-i18n="telegram.bot_token">Bot Token</span> <span class="key-status" id="tg-token-status"></span></label>
+                <input type="password" id="tg-bot-token" placeholder="123456789:AAH..." autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label for="tg-allowed-ids" data-i18n="telegram.allowed_ids">Allowed Chat IDs (comma-separated)</label>
+                <input type="text" id="tg-allowed-ids" placeholder="e.g. 123456789" data-i18n-placeholder="telegram.allowed_ids_placeholder" autocomplete="off" />
+                <small class="modal-desc" data-i18n-html="telegram.allowed_ids_hint">Message <code>/id</code> to your bot on Telegram to discover your Chat ID. Only listed IDs can control your device.</small>
+              </div>
+
+              <div class="modal-footer">
+                <span class="save-msg" id="tg-save-msg"></span>
+                <button type="submit" class="send-btn" data-i18n="telegram.save">Save Telegram Settings</button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Tab 5: Security (Login & 2FA) -->
+          <div class="modal-body tab-panel hidden" id="tab-panel-security">
+            <div class="security-card">
+              <div class="security-card-head">
+                <div>
+                  <h3 data-i18n="security.login_title">Login Protection</h3>
+                  <p class="modal-desc" data-i18n="security.login_desc">Optionally require a username and password to access the Web UI.</p>
+                </div>
+                <span class="status-pill" id="sec-auth-badge"><span class="dot"></span><span class="label" data-i18n="security.disabled">Disabled</span></span>
+              </div>
+
+              <form id="sec-credentials-form" class="security-form">
+                <div class="settings-row settings-row-2">
+                  <div class="field">
+                    <label for="sec-username" data-i18n="security.username">Username</label>
+                    <input type="text" id="sec-username" placeholder="admin" autocomplete="username" />
+                  </div>
+                  <div class="field">
+                    <label for="sec-password" data-i18n="security.password">Password</label>
+                    <input type="password" id="sec-password" placeholder="At least 4 characters" data-i18n-placeholder="security.password_placeholder" autocomplete="new-password" />
+                  </div>
+                </div>
+                <div class="security-actions">
+                  <button type="submit" class="send-btn" id="btn-save-credentials" data-i18n="security.enable_login">Enable Login</button>
+                  <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-disable-auth" data-i18n="security.disable_login">Disable Login</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="security-card" id="sec-mfa-card">
+              <div class="security-card-head">
+                <div>
+                  <h3 data-i18n="security.mfa_title">Two-Factor Authentication (2FA)</h3>
+                  <p class="modal-desc" data-i18n="security.mfa_desc">Use any TOTP authenticator app (Google Authenticator, 1Password, Authy, Bitwarden, Apple Passwords).</p>
+                </div>
+                <span class="status-pill" id="sec-mfa-badge"><span class="dot"></span><span class="label" data-i18n="security.off">Off</span></span>
+              </div>
+
+              <div class="security-actions" id="sec-mfa-idle">
+                <button type="button" class="pill-btn pill-btn-accent" id="btn-setup-mfa" data-i18n="security.setup_mfa">Set Up 2FA</button>
+                <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-disable-mfa" data-i18n="security.disable_mfa">Disable 2FA</button>
+              </div>
+
+              <div class="mfa-setup-box hidden" id="sec-mfa-setup-box">
+                <div class="mfa-qr-wrap" id="sec-mfa-qr"></div>
+                <div class="mfa-setup-details">
+                  <p class="modal-desc" data-i18n="security.mfa_scan">Scan this QR code with your authenticator app, or enter the setup key manually:</p>
+                  <code class="mfa-secret" id="sec-mfa-secret"></code>
+                  <form id="sec-mfa-verify-form" class="mfa-verify-row">
+                    <input type="text" id="sec-mfa-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" data-i18n-placeholder="security.mfa_code_placeholder" autocomplete="one-time-code" />
+                    <button type="submit" class="send-btn" data-i18n="security.verify_enable">Verify &amp; Enable</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <span class="save-msg" id="sec-msg"></span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Live Device Screen & Controls -->
@@ -299,254 +542,6 @@
         </div>
       </section>
     </main>
-  </div>
-
-  <!-- Settings Modal -->
-  <div class="modal-backdrop hidden" id="settings-modal">
-    <div class="modal modal-settings">
-      <div class="modal-header">
-        <h2 data-i18n="settings.title">Settings</h2>
-        <div class="modal-header-actions">
-          <select class="lang-select" id="settings-lang-select" aria-label="Language" data-i18n-aria-label="settings.language">
-            <option value="en">English</option>
-            <option value="de">Deutsch</option>
-            <option value="zh-CN">简体中文</option>
-          </select>
-          <button class="ghost-icon-btn" id="btn-close-settings">&times;</button>
-        </div>
-      </div>
-
-      <div class="modal-tabs" role="tablist">
-        <button type="button" class="tab-btn active" data-tab="keys" role="tab" aria-selected="true">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></svg>
-          <span data-i18n="settings.tab_keys">Keys</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="models" role="tab" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-          <span data-i18n="settings.tab_models">Models</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="prompt" role="tab" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span data-i18n="settings.tab_prompt">Prompt</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="telegram" role="tab" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          <span data-i18n="settings.tab_telegram">Telegram</span>
-        </button>
-        <button type="button" class="tab-btn" data-tab="security" role="tab" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span data-i18n="settings.tab_security">Security</span>
-        </button>
-      </div>
-
-      <!-- Tab 1: Agent Keys -->
-      <div class="modal-body tab-panel" id="tab-panel-keys">
-        <p class="modal-desc" data-i18n="keys.desc">
-          Manage API keys for AI providers. Switch provider and model per session directly from the prompt box.
-        </p>
-
-        <div class="keys-list" id="configured-keys-list"></div>
-
-        <form class="add-key-card" id="add-key-form">
-          <div class="add-key-row">
-            <select id="add-key-provider" aria-label="Provider">
-              <option value="claude">Claude (Anthropic)</option>
-              <option value="gemini">Gemini (Google)</option>
-              <option value="grok">Grok (xAI)</option>
-              <option value="openai">OpenAI</option>
-            </select>
-            <input type="password" id="add-key-input" placeholder="Paste API key..." data-i18n-placeholder="keys.placeholder" autocomplete="off" />
-            <button type="submit" class="send-btn" data-i18n="keys.add">Add Key</button>
-          </div>
-        </form>
-
-        <div class="modal-footer">
-          <span class="save-msg" id="keys-save-msg"></span>
-        </div>
-      </div>
-
-      <!-- Tab 2: Models & Agent Behavior -->
-      <form class="modal-body tab-panel hidden" id="tab-panel-models">
-        <p class="modal-desc" data-i18n="models.desc">
-          Choose the default provider and model used when creating new sessions, along with agent execution settings.
-        </p>
-
-        <div class="models-default-grid">
-          <div class="field">
-            <label for="cfg-default-provider" data-i18n="models.default_provider">Default Provider</label>
-            <select id="cfg-default-provider">
-              <option value="claude">Claude (Anthropic)</option>
-              <option value="gemini">Gemini (Google)</option>
-              <option value="grok">Grok (xAI)</option>
-              <option value="openai">OpenAI</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="cfg-default-model"><span data-i18n="models.default_model">Default Model</span> <span class="model-source-hint" id="cfg-model-source-hint"></span></label>
-            <div class="default-model-row">
-              <select id="cfg-default-model"></select>
-              <button type="button" class="ghost-icon-btn" id="btn-refresh-default-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="settings-row settings-row-2">
-          <div class="field">
-            <label for="cfg-max-steps" data-i18n="models.max_steps">Max Steps</label>
-            <input type="number" id="cfg-max-steps" min="1" max="1024" value="15" />
-          </div>
-          <div class="field">
-            <label for="cfg-step-delay" data-i18n="models.step_delay">Step Delay (ms)</label>
-            <input type="number" id="cfg-step-delay" min="0" max="5000" value="600" />
-          </div>
-        </div>
-
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" id="cfg-include-screenshot" checked />
-            <span data-i18n="models.include_screenshot">Send live device screenshot with each agent step</span>
-          </label>
-        </div>
-
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" id="cfg-gemini-search" checked />
-            <span data-i18n="models.gemini_search">Enable Google Search grounding (Gemini models)</span>
-          </label>
-        </div>
-
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" id="cfg-gemini-maps" checked />
-            <span data-i18n="models.gemini_maps">Enable Google Maps grounding (Gemini models)</span>
-          </label>
-        </div>
-
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" id="cfg-notify-complete" checked />
-            <span data-i18n="models.notify_complete">Send notification when agent execution completes</span>
-          </label>
-        </div>
-
-        <div class="modal-footer">
-          <span class="save-msg" id="settings-save-msg"></span>
-          <button type="submit" class="send-btn" data-i18n="models.save">Save Settings</button>
-        </div>
-      </form>
-
-      <!-- Tab 3: System Prompt -->
-      <form class="modal-body tab-panel hidden" id="tab-panel-prompt">
-        <p class="modal-desc" data-i18n="prompt.desc">
-          Customize the system instructions given to the AI agent before it controls your Android device.
-        </p>
-        <div class="field prompt-field">
-          <label for="cfg-system-prompt" data-i18n="prompt.label">System Prompt</label>
-          <textarea id="cfg-system-prompt" rows="14" placeholder="Enter system prompt instructions..." data-i18n-placeholder="prompt.placeholder"></textarea>
-        </div>
-        <div class="modal-footer">
-          <span class="save-msg" id="prompt-save-msg"></span>
-          <button type="submit" class="send-btn" data-i18n="prompt.save">Save Prompt</button>
-        </div>
-      </form>
-
-      <!-- Tab 4: Telegram Bot -->
-      <form class="modal-body tab-panel hidden" id="tab-panel-telegram">
-        <div class="security-card">
-          <div class="security-card-head">
-            <div>
-              <h3 data-i18n="telegram.title">Telegram Remote Control</h3>
-              <p class="modal-desc" data-i18n="telegram.desc">Control this Android device from anywhere using a Telegram bot (create one with @BotFather).</p>
-            </div>
-            <span class="status-pill" id="tg-status-badge"><span class="dot"></span><span class="label" data-i18n="telegram.disabled">Disabled</span></span>
-          </div>
-
-          <div class="field checkbox-field">
-            <label>
-              <input type="checkbox" id="tg-enabled" />
-              <span data-i18n="telegram.enable">Enable Telegram Bot (long-polling, no port forwarding needed)</span>
-            </label>
-          </div>
-
-          <div class="field">
-            <label for="tg-bot-token"><span data-i18n="telegram.bot_token">Bot Token</span> <span class="key-status" id="tg-token-status"></span></label>
-            <input type="password" id="tg-bot-token" placeholder="123456789:AAH..." autocomplete="off" />
-          </div>
-
-          <div class="field">
-            <label for="tg-allowed-ids" data-i18n="telegram.allowed_ids">Allowed Chat IDs (comma-separated)</label>
-            <input type="text" id="tg-allowed-ids" placeholder="e.g. 123456789" data-i18n-placeholder="telegram.allowed_ids_placeholder" autocomplete="off" />
-            <small class="modal-desc" data-i18n-html="telegram.allowed_ids_hint">Message <code>/id</code> to your bot on Telegram to discover your Chat ID. Only listed IDs can control your device.</small>
-          </div>
-
-          <div class="modal-footer">
-            <span class="save-msg" id="tg-save-msg"></span>
-            <button type="submit" class="send-btn" data-i18n="telegram.save">Save Telegram Settings</button>
-          </div>
-        </div>
-      </form>
-
-      <!-- Tab 6: Security (Login & 2FA) -->
-      <div class="modal-body tab-panel hidden" id="tab-panel-security">
-        <div class="security-card">
-          <div class="security-card-head">
-            <div>
-              <h3 data-i18n="security.login_title">Login Protection</h3>
-              <p class="modal-desc" data-i18n="security.login_desc">Optionally require a username and password to access the Web UI.</p>
-            </div>
-            <span class="status-pill" id="sec-auth-badge"><span class="dot"></span><span class="label" data-i18n="security.disabled">Disabled</span></span>
-          </div>
-
-          <form id="sec-credentials-form" class="security-form">
-            <div class="settings-row settings-row-2">
-              <div class="field">
-                <label for="sec-username" data-i18n="security.username">Username</label>
-                <input type="text" id="sec-username" placeholder="admin" autocomplete="username" />
-              </div>
-              <div class="field">
-                <label for="sec-password" data-i18n="security.password">Password</label>
-                <input type="password" id="sec-password" placeholder="At least 4 characters" data-i18n-placeholder="security.password_placeholder" autocomplete="new-password" />
-              </div>
-            </div>
-            <div class="security-actions">
-              <button type="submit" class="send-btn" id="btn-save-credentials" data-i18n="security.enable_login">Enable Login</button>
-              <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-disable-auth" data-i18n="security.disable_login">Disable Login</button>
-            </div>
-          </form>
-        </div>
-
-        <div class="security-card" id="sec-mfa-card">
-          <div class="security-card-head">
-            <div>
-              <h3 data-i18n="security.mfa_title">Two-Factor Authentication (2FA)</h3>
-              <p class="modal-desc" data-i18n="security.mfa_desc">Use any TOTP authenticator app (Google Authenticator, 1Password, Authy, Bitwarden, Apple Passwords).</p>
-            </div>
-            <span class="status-pill" id="sec-mfa-badge"><span class="dot"></span><span class="label" data-i18n="security.off">Off</span></span>
-          </div>
-
-          <div class="security-actions" id="sec-mfa-idle">
-            <button type="button" class="pill-btn pill-btn-accent" id="btn-setup-mfa" data-i18n="security.setup_mfa">Set Up 2FA</button>
-            <button type="button" class="pill-btn pill-btn-danger hidden" id="btn-disable-mfa" data-i18n="security.disable_mfa">Disable 2FA</button>
-          </div>
-
-          <div class="mfa-setup-box hidden" id="sec-mfa-setup-box">
-            <div class="mfa-qr-wrap" id="sec-mfa-qr"></div>
-            <div class="mfa-setup-details">
-              <p class="modal-desc" data-i18n="security.mfa_scan">Scan this QR code with your authenticator app, or enter the setup key manually:</p>
-              <code class="mfa-secret" id="sec-mfa-secret"></code>
-              <form id="sec-mfa-verify-form" class="mfa-verify-row">
-                <input type="text" id="sec-mfa-code" inputmode="numeric" maxlength="6" placeholder="6-digit code" data-i18n-placeholder="security.mfa_code_placeholder" autocomplete="one-time-code" />
-                <button type="submit" class="send-btn" data-i18n="security.verify_enable">Verify &amp; Enable</button>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <span class="save-msg" id="sec-msg"></span>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Login Overlay -->
