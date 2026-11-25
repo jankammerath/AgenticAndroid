@@ -263,8 +263,6 @@ longitude = 7.0982
 
 Once running, open **http://localhost:8080** in your browser.
 
----
-
 ## Releasing a New Version
 
 Pushing a version tag triggers `.github/workflows/release.yml`, which compiles the Rust core for `arm64-v8a`, `armeabi-v7a`, and `x86_64`, builds a signed universal APK, and publishes a GitHub Release:
