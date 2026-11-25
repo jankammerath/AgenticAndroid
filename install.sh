@@ -99,23 +99,25 @@ echo ""
 echo "==> [1/6] Installing KVM, Java, and Android emulator dependencies ($PKG_MGR)..."
 if [ "$PKG_MGR" = "apt" ]; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
+  apt-get update -y </dev/null
   if [ "$ANDROID_ABI" = "arm64-v8a" ]; then
     QEMU_PKG="qemu-system-arm"
   else
     QEMU_PKG="qemu-system-x86"
   fi
   apt-get install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
     ca-certificates curl unzip openssl \
     "$QEMU_PKG" libvirt-daemon-system bridge-utils \
     openjdk-17-jre-headless \
-    libpulse0 libgl1 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6
+    libpulse0 libgl1 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6 </dev/null
 else
   dnf install -y \
     ca-certificates curl unzip openssl \
     qemu-kvm libvirt \
     java-17-openjdk-headless \
-    pulseaudio-libs mesa-libGL nss libXcomposite libXcursor libXi libXtst
+    pulseaudio-libs mesa-libGL nss libXcomposite libXcursor libXi libXtst </dev/null
 fi
 
 if [ ! -e /dev/kvm ]; then
@@ -140,7 +142,7 @@ yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
   "platform-tools" \
   "emulator" \
   "platforms;android-35" \
-  "system-images;android-35;google_apis;${ANDROID_ABI}"
+  "system-images;android-35;google_apis;${ANDROID_ABI}" </dev/null
 
 echo "==> [3/6] Downloading & installing/upgrading latest Agentic Android package..."
 # Snapshot live state from currently running server before upgrading
@@ -177,11 +179,15 @@ if [ "$PKG_MGR" = "apt" ]; then
   PKG_FILE="$TMP_PKG_DIR/agentic-android.deb"
   curl -fsSL "https://github.com/${REPO}/releases/latest/download/agentic-android.deb" -o "$PKG_FILE"
   # Prevent needrestart from prematurely restarting agentic-android.service mid-upgrade
-  NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y "$PKG_FILE"
+  # and keep existing /etc/agentic-android/config.toml without interactive dpkg prompts
+  NEEDRESTART_SUSPEND=1 DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    "$PKG_FILE" </dev/null
 else
   PKG_FILE="$TMP_PKG_DIR/agentic-android.rpm"
   curl -fsSL "https://github.com/${REPO}/releases/latest/download/agentic-android.rpm" -o "$PKG_FILE"
-  dnf install -y "$PKG_FILE" || dnf upgrade -y "$PKG_FILE"
+  (dnf install -y "$PKG_FILE" || dnf upgrade -y "$PKG_FILE") </dev/null
 fi
 rm -rf "$TMP_PKG_DIR"
 
@@ -269,15 +275,15 @@ echo "==> [6/6] Configuring HTTPS with Let's Encrypt..."
 if [ -n "$HOSTNAME_DOMAIN" ]; then
   if ! command -v caddy >/dev/null 2>&1; then
     if [ "$PKG_MGR" = "apt" ]; then
-      apt-get install -y debian-keyring debian-archive-keyring apt-transport-https gpg
+      apt-get install -y debian-keyring debian-archive-keyring apt-transport-https gpg </dev/null
       curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
       curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-      apt-get update -y
-      apt-get install -y caddy
+      apt-get update -y </dev/null
+      apt-get install -y caddy </dev/null
     else
-      dnf install -y 'dnf-command(copr)' || true
-      dnf copr enable -y @caddy/caddy || true
-      dnf install -y caddy
+      dnf install -y 'dnf-command(copr)' </dev/null || true
+      dnf copr enable -y @caddy/caddy </dev/null || true
+      dnf install -y caddy </dev/null
     fi
   fi
 
