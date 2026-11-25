@@ -42,6 +42,7 @@ class AgentForegroundService : Service() {
         const val ACTION_START_SERVER = "org.agenticandroid.START_SERVER"
         const val ACTION_STOP_SERVER = "org.agenticandroid.STOP_SERVER"
         const val ACTION_START_MEDIA = "org.agenticandroid.START_MEDIA"
+        const val ACTION_STOP_MEDIA = "org.agenticandroid.STOP_MEDIA"
         const val EXTRA_PORT = "port"
         const val EXTRA_BACKUP_SECRET = "backup_secret"
         const val EXTRA_RESULT_CODE = "result_code"
@@ -52,6 +53,10 @@ class AgentForegroundService : Service() {
 
         @Volatile
         var isMediaCastActive: Boolean = false
+            private set
+
+        @Volatile
+        var appContext: Context? = null
             private set
     }
 
@@ -70,6 +75,7 @@ class AgentForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        appContext = applicationContext
         createNotificationChannel()
     }
 
@@ -89,6 +95,13 @@ class AgentForegroundService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
+            }
+            ACTION_STOP_MEDIA -> {
+                val port = NativeBridge.nativeGetServerPort().takeIf { it > 0 } ?: 8080
+                stopMediaCast()
+                startAsForeground(port, withMediaProjection = false)
+                startFallbackPoller()
+                return START_STICKY
             }
             ACTION_START_MEDIA -> {
                 val code = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
@@ -212,7 +225,7 @@ class AgentForegroundService : Service() {
             val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
             try {
                 val now = System.currentTimeMillis()
-                if (now - lastFrameTs < 120) return@setOnImageAvailableListener // ~8 fps
+                if (now - lastFrameTs < 66) return@setOnImageAvailableListener // ~15 fps
                 lastFrameTs = now
 
                 val plane = img.planes[0]

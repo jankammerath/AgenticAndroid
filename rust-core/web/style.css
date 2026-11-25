@@ -161,6 +161,15 @@ html, body {
   background: var(--surface-3);
 }
 
+.pill-btn.active {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+}
+
+.pill-btn.active:hover {
+  background: rgba(52, 211, 153, 0.28);
+}
+
 .pill-btn-accent {
   background: var(--accent);
   color: #fff;

@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtServerUrl: TextView
     private lateinit var txtAccessibilityStatus: TextView
     private lateinit var txtCaptureStatus: TextView
+    private var returnToBackgroundAfterCast = false
 
     private val mediaProjectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -37,6 +38,10 @@ class MainActivity : AppCompatActivity() {
             }
             ContextCompat.startForegroundService(this, svcIntent)
             txtCaptureStatus.postDelayed({ refreshUi() }, 400)
+        }
+        if (returnToBackgroundAfterCast) {
+            returnToBackgroundAfterCast = false
+            moveTaskToBack(true)
         }
     }
 
@@ -79,11 +84,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnStartMediaCast).setOnClickListener {
-            if (!NativeBridge.nativeIsServerRunning()) {
-                startServer()
-            }
-            val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjectionLauncher.launch(mpm.createScreenCaptureIntent())
+            returnToBackgroundAfterCast = false
+            requestMediaProjection()
         }
 
         requestRuntimePermissions()
@@ -92,6 +94,30 @@ class MainActivity : AppCompatActivity() {
         if (intent.getBooleanExtra("auto_start", true) && !NativeBridge.nativeIsServerRunning()) {
             startServer()
         }
+
+        handleMediaCastIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleMediaCastIntent(intent)
+    }
+
+    private fun handleMediaCastIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("start_media_cast", false) == true) {
+            intent.removeExtra("start_media_cast")
+            returnToBackgroundAfterCast = true
+            requestMediaProjection()
+        }
+    }
+
+    private fun requestMediaProjection() {
+        if (!NativeBridge.nativeIsServerRunning()) {
+            startServer()
+        }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjectionLauncher.launch(mpm.createScreenCaptureIntent())
     }
 
     override fun onResume() {

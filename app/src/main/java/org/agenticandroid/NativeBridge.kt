@@ -1,5 +1,6 @@
 package org.agenticandroid
 
+import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import org.json.JSONObject
@@ -51,6 +52,46 @@ object NativeBridge {
                     put("device_name", resolveDeviceName(service))
                     put("screen_width", dims.first)
                     put("screen_height", dims.second)
+                }.toString()
+            }
+
+            if (tool == "start_high_fps") {
+                if (AgentForegroundService.isMediaCastActive) {
+                    return JSONObject().apply {
+                        put("ok", true)
+                        put("media_cast_active", true)
+                    }.toString()
+                }
+                val ctx = service ?: AgentForegroundService.appContext
+                    ?: return JSONObject().apply {
+                        put("ok", false)
+                        put("error", "Service context unavailable")
+                    }.toString()
+                val activityIntent = Intent(ctx, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra("start_media_cast", true)
+                }
+                ctx.startActivity(activityIntent)
+                return JSONObject().apply {
+                    put("ok", true)
+                    put("prompted", true)
+                    put("media_cast_active", false)
+                }.toString()
+            }
+
+            if (tool == "stop_high_fps") {
+                val ctx = service ?: AgentForegroundService.appContext
+                    ?: return JSONObject().apply {
+                        put("ok", false)
+                        put("error", "Service context unavailable")
+                    }.toString()
+                val svcIntent = Intent(ctx, AgentForegroundService::class.java).apply {
+                    action = AgentForegroundService.ACTION_STOP_MEDIA
+                }
+                ctx.startService(svcIntent)
+                return JSONObject().apply {
+                    put("ok", true)
+                    put("media_cast_active", false)
                 }.toString()
             }
 

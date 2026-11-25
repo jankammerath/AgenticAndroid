@@ -11,6 +11,8 @@
     audioWs: null,
     eventsWs: null,
     audioEnabled: false,
+    highFpsActive: false,
+    highFpsPending: false,
     audioCtx: null,
     audioNextTime: 0,
     audioSampleRate: 16000,
@@ -22,6 +24,7 @@
   const els = {
     badgeAccessibility: document.getElementById("badge-accessibility"),
     badgeVideo: document.getElementById("badge-video"),
+    btnHighFpsToggle: document.getElementById("btn-high-fps-toggle"),
     btnAudioToggle: document.getElementById("btn-audio-toggle"),
     btnOpenSettings: document.getElementById("btn-open-settings"),
     btnLogout: document.getElementById("btn-logout"),
@@ -38,6 +41,7 @@
     mobileChatDot: document.getElementById("mobile-chat-dot"),
     mobileBadgeAccessibility: document.getElementById("mobile-badge-accessibility"),
     mobileBadgeVideo: document.getElementById("mobile-badge-video"),
+    mobileBtnHighFps: document.getElementById("mobile-btn-high-fps"),
     mobileBtnAudio: document.getElementById("mobile-btn-audio"),
     mobileBtnSettings: document.getElementById("mobile-btn-settings"),
     mobileBtnLogout: document.getElementById("mobile-btn-logout"),
@@ -775,6 +779,10 @@
         state.deviceHeight = st.device.screen_height;
         els.deviceDims.textContent = `${state.deviceWidth} × ${state.deviceHeight}`;
       }
+      const mediaCast = !!st.device?.media_cast_active;
+      state.highFpsActive = mediaCast;
+      if (mediaCast) state.highFpsPending = false;
+      updateHighFpsButtons();
     } catch {
       els.badgeAccessibility.className = "status-pill warn";
       els.badgeAccessibility.querySelector(".label").textContent = "Disconnected";
@@ -825,6 +833,60 @@
     };
   }
 
+  function updateHighFpsButtons() {
+    const label = state.highFpsActive
+      ? "High-FPS On"
+      : state.highFpsPending
+        ? "High-FPS..."
+        : "High-FPS Off";
+    els.btnHighFpsToggle.textContent = label;
+    els.mobileBtnHighFps.textContent = label;
+    els.btnHighFpsToggle.classList.toggle("active", state.highFpsActive);
+    els.mobileBtnHighFps.classList.toggle("active", state.highFpsActive);
+  }
+
+  async function toggleHighFps() {
+    if (state.highFpsActive) {
+      state.highFpsActive = false;
+      state.highFpsPending = false;
+      updateHighFpsButtons();
+      try {
+        await api("/api/device/action", {
+          method: "POST",
+          body: JSON.stringify({ action: "stop_high_fps", params: {} }),
+        });
+      } catch {}
+      setTimeout(refreshStatus, 400);
+      return;
+    }
+
+    state.highFpsPending = true;
+    updateHighFpsButtons();
+    closeMobileOverlays();
+    try {
+      const res = await api("/api/device/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "start_high_fps", params: {} }),
+      });
+      if (res?.media_cast_active) {
+        state.highFpsActive = true;
+        state.highFpsPending = false;
+        updateHighFpsButtons();
+        return;
+      }
+    } catch {
+      state.highFpsPending = false;
+      updateHighFpsButtons();
+      return;
+    }
+    setTimeout(refreshStatus, 1000);
+    setTimeout(refreshStatus, 3000);
+    setTimeout(() => {
+      state.highFpsPending = false;
+      refreshStatus();
+    }, 6000);
+  }
+
   function toggleAudio() {
     if (state.audioEnabled) {
       state.audioEnabled = false;
@@ -834,12 +896,16 @@
       }
       els.btnAudioToggle.textContent = "Audio Off";
       els.mobileBtnAudio.textContent = "Audio Off";
+      els.btnAudioToggle.classList.remove("active");
+      els.mobileBtnAudio.classList.remove("active");
       return;
     }
 
     state.audioEnabled = true;
     els.btnAudioToggle.textContent = "Audio On";
     els.mobileBtnAudio.textContent = "Audio On";
+    els.btnAudioToggle.classList.add("active");
+    els.mobileBtnAudio.classList.add("active");
     if (!state.audioCtx) {
       state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -987,6 +1053,7 @@
   });
 
   els.mobileBackdrop.addEventListener("click", closeMobileOverlays);
+  els.mobileBtnHighFps.addEventListener("click", toggleHighFps);
   els.mobileBtnAudio.addEventListener("click", toggleAudio);
   els.mobileBtnSettings.addEventListener("click", () => {
     closeMobileOverlays();
@@ -1152,6 +1219,7 @@
     });
   });
 
+  els.btnHighFpsToggle.addEventListener("click", toggleHighFps);
   els.btnAudioToggle.addEventListener("click", toggleAudio);
 
   // Settings modal & tabs
