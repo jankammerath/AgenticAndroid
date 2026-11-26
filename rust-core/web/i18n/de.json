@@ -47,7 +47,7 @@
   "chat.device_action_many": "{count} Geräteaktionen",
   "chat.task_finished": "Aufgabe abgeschlossen.",
 
-  "device.live_screen": "Live-Bildschirm",
+  "device.live_screen": "Bildschirm",
   "device.controls": "Gerätesteuerung",
   "device.refresh_frame": "Bild aktualisieren",
   "device.inspect_ui": "UI-Baum anzeigen",

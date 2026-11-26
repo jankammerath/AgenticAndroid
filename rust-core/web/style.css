@@ -254,6 +254,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
 }
 
@@ -1197,6 +1199,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
   padding: 0 12px;
   border-radius: 10px 10px 0 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1213,6 +1217,7 @@ html, body {
 .device-tab .center-tab-icon {
   color: var(--accent);
   opacity: 1;
+  flex-shrink: 0;
 }
 
 .device-tab::before,
@@ -1244,7 +1249,8 @@ html, body {
 .device-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  flex-shrink: 0;
   padding-bottom: 4px;
 }
 
@@ -1261,6 +1267,8 @@ html, body {
   font-size: 11px;
   color: var(--muted);
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
   margin-right: 4px;
 }
 
