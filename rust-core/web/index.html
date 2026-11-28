@@ -306,13 +306,15 @@
               <span class="save-msg" id="keys-save-msg"></span>
             </div>
 
-            <div class="security-card" id="custom-providers-card">
-              <h3 data-i18n="custom_providers.title">Custom Providers (OpenAI-Compatible)</h3>
-              <p class="modal-desc" data-i18n="custom_providers.desc">Add any OpenAI-compatible provider such as Ollama, LM Studio, DeepSeek, Groq, Together AI, or self-hosted vLLM. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).</p>
+            <div class="custom-providers-section" id="custom-providers-card">
+              <div class="custom-providers-head">
+                <h3 data-i18n="custom_providers.title">Custom Providers (OpenAI-Compatible)</h3>
+                <p class="modal-desc" data-i18n="custom_providers.desc">Add any OpenAI-compatible provider such as Ollama, LM Studio, DeepSeek, Groq, Together AI, or self-hosted vLLM. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).</p>
+              </div>
 
               <div class="keys-list" id="custom-providers-list"></div>
 
-              <form class="custom-provider-form" id="custom-provider-form">
+              <form class="add-key-card custom-provider-form" id="custom-provider-form">
                 <input type="hidden" id="cp-edit-id" value="" />
                 <div class="settings-row settings-row-2">
                   <div class="field">
