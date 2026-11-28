@@ -251,7 +251,7 @@ pub async fn fetch_provider_models(
     custom_base_url: &str,
 ) -> Result<Vec<String>, String> {
     let key = api_key.trim();
-    if *provider != Provider::Custom && key.is_empty() {
+    if !provider.is_custom() && key.is_empty() {
         return Err(format!(
             "No API key configured for {}.",
             provider.display_name()
@@ -425,10 +425,13 @@ pub async fn fetch_provider_models(
             models.sort();
             Ok(models)
         }
-        Provider::Custom => {
-            let base = custom_base_url.trim().trim_end_matches('/');
+        Provider::Custom(_) => {
+            let mut base = custom_base_url.trim().trim_end_matches('/');
+            if let Some(stripped) = base.strip_suffix("/chat/completions") {
+                base = stripped.trim_end_matches('/');
+            }
             if base.is_empty() {
-                return Err("No Base URL configured for Custom / Local LLM.".to_string());
+                return Err("No Base URL configured for this custom provider.".to_string());
             }
             let url = format!("{base}/models");
             let mut req = client.get(&url);
@@ -469,7 +472,21 @@ pub async fn fetch_provider_models(
                     })
                     .unwrap_or_default();
             }
+            if models.is_empty() {
+                if let Some(arr) = data.as_array() {
+                    models = arr
+                        .iter()
+                        .filter_map(|m| {
+                            m.as_str()
+                                .or_else(|| m["id"].as_str())
+                                .or_else(|| m["name"].as_str())
+                                .map(|s| s.to_string())
+                        })
+                        .collect();
+                }
+            }
             models.sort();
+            models.dedup();
             Ok(models)
         }
     }
@@ -491,7 +508,7 @@ pub async fn call_llm(
     messages: &[TurnMessage],
     gemini_grounding: GeminiGroundingOptions,
 ) -> Result<LlmResponse, String> {
-    if *provider != Provider::Custom && api_key.trim().is_empty() {
+    if !provider.is_custom() && api_key.trim().is_empty() {
         return Err(format!(
             "No API key configured for {}. Please add your API key in Settings.",
             provider.display_name()
@@ -535,11 +552,11 @@ pub async fn call_llm(
             )
             .await
         }
-        Provider::Custom => {
+        Provider::Custom(_) => {
             let base = custom_base_url.trim().trim_end_matches('/');
             if base.is_empty() {
                 return Err(
-                    "No Base URL configured for Custom / Local LLM. Set it in Settings → Keys."
+                    "No Base URL configured for this custom provider. Check Settings → Keys."
                         .to_string(),
                 );
             }
@@ -638,7 +655,7 @@ async fn call_openai_compatible(
             TurnMessage::Assistant { text, tool_calls } => {
                 let mut obj = json!({
                     "role": "assistant",
-                    "content": if text.is_empty() { Value::Null } else { Value::String(text.clone()) }
+                    "content": text
                 });
                 if !tool_calls.is_empty() {
                     let calls: Vec<Value> = tool_calls
@@ -712,15 +729,35 @@ async fn call_openai_compatible(
     let data: Value =
         serde_json::from_str(&resp_text).map_err(|e| format!("Invalid JSON response: {e}"))?;
     let message = &data["choices"][0]["message"];
-    let text = message["content"].as_str().unwrap_or("").to_string();
+    let text = if let Some(s) = message["content"].as_str() {
+        s.to_string()
+    } else if let Some(parts) = message["content"].as_array() {
+        parts
+            .iter()
+            .filter_map(|p| p["text"].as_str().or_else(|| p.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        String::new()
+    };
 
     let mut tool_calls = Vec::new();
     if let Some(arr) = message["tool_calls"].as_array() {
-        for tc in arr {
-            let id = tc["id"].as_str().unwrap_or("call_0").to_string();
+        for (idx, tc) in arr.iter().enumerate() {
+            let id = tc["id"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("call_{idx}"));
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
-            let args_str = tc["function"]["arguments"].as_str().unwrap_or("{}");
-            let arguments: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({}));
+            let raw_args = &tc["function"]["arguments"];
+            let arguments: Value = if let Some(args_str) = raw_args.as_str() {
+                serde_json::from_str(args_str).unwrap_or_else(|_| json!({}))
+            } else if raw_args.is_object() {
+                raw_args.clone()
+            } else {
+                json!({})
+            };
             if !name.is_empty() {
                 tool_calls.push(ToolCallRequest {
                     id,

@@ -95,9 +95,16 @@
     addKeyInput: document.getElementById("add-key-input"),
     configuredKeysList: document.getElementById("configured-keys-list"),
     keysSaveMsg: document.getElementById("keys-save-msg"),
-    customLlmForm: document.getElementById("custom-llm-form"),
-    cfgCustomBaseUrl: document.getElementById("cfg-custom-base-url"),
-    customLlmSaveMsg: document.getElementById("custom-llm-save-msg"),
+    customProvidersList: document.getElementById("custom-providers-list"),
+    customProviderForm: document.getElementById("custom-provider-form"),
+    cpEditId: document.getElementById("cp-edit-id"),
+    cpName: document.getElementById("cp-name"),
+    cpBaseUrl: document.getElementById("cp-base-url"),
+    cpApiKey: document.getElementById("cp-api-key"),
+    cpDefaultModel: document.getElementById("cp-default-model"),
+    btnCpCancel: document.getElementById("btn-cp-cancel"),
+    btnCpSubmit: document.getElementById("btn-cp-submit"),
+    customProviderMsg: document.getElementById("custom-provider-msg"),
     tabPanelKeys: document.getElementById("tab-panel-keys"),
     tabPanelModels: document.getElementById("tab-panel-models"),
     tabPanelPrompt: document.getElementById("tab-panel-prompt"),
@@ -616,7 +623,7 @@
       item.innerHTML = `
         <div class="session-meta">
           <div class="session-title-row">${tgBadge}<span class="session-title">${escapeHtml(s.title)}</span></div>
-          <div class="session-sub">${escapeHtml(s.provider)} · ${escapeHtml(s.model)}</div>
+          <div class="session-sub">${escapeHtml(getProviderShortLabel(s.provider))} · ${escapeHtml(s.model)}</div>
         </div>
         <button class="session-del" title="${escapeHtml(t("sessions.delete_title"))}">&times;</button>
       `;
@@ -998,12 +1005,140 @@
     grok: "Grok (xAI)",
     openai: "OpenAI",
     openrouter: "OpenRouter",
-    custom: "Custom / Local (Ollama)",
   };
+
+  const PROVIDER_SHORT_LABELS = {
+    claude: "Claude",
+    gemini: "Gemini",
+    grok: "Grok",
+    openai: "OpenAI",
+    openrouter: "OpenRouter",
+  };
+
+  function getProviderLabel(id) {
+    const p = state.providers.find((x) => x.id === id);
+    if (p && p.name) return p.name;
+    return PROVIDER_LABELS[id] || id;
+  }
+
+  function getProviderShortLabel(id) {
+    const p = state.providers.find((x) => x.id === id);
+    if (p && p.custom && p.name) return p.name;
+    return PROVIDER_SHORT_LABELS[id] || id;
+  }
+
+  function populateProviderSelects() {
+    const providers = state.providers || [];
+    const activeSession = getActiveSession();
+    const currentSessionVal = activeSession?.provider || els.sessionProvider.value || "gemini";
+    const currentDefaultVal = state.config?.default_provider || els.cfgDefaultProvider.value || "gemini";
+
+    els.sessionProvider.innerHTML = "";
+    els.cfgDefaultProvider.innerHTML = "";
+
+    for (const p of providers) {
+      const optSession = document.createElement("option");
+      optSession.value = p.id;
+      optSession.textContent = p.custom ? p.name : (PROVIDER_SHORT_LABELS[p.id] || p.name);
+      els.sessionProvider.appendChild(optSession);
+
+      const optDefault = document.createElement("option");
+      optDefault.value = p.id;
+      optDefault.textContent = p.name;
+      els.cfgDefaultProvider.appendChild(optDefault);
+    }
+
+    if ([...els.sessionProvider.options].some((o) => o.value === currentSessionVal)) {
+      els.sessionProvider.value = currentSessionVal;
+    }
+    if ([...els.cfgDefaultProvider.options].some((o) => o.value === currentDefaultVal)) {
+      els.cfgDefaultProvider.value = currentDefaultVal;
+    }
+  }
+
+  async function loadProviders() {
+    const pData = await api("/api/providers");
+    state.providers = pData.providers || [];
+    populateProviderSelects();
+  }
+
+  function resetCustomProviderForm() {
+    if (!els.customProviderForm) return;
+    els.cpEditId.value = "";
+    els.cpName.value = "";
+    els.cpBaseUrl.value = "";
+    els.cpApiKey.value = "";
+    els.cpApiKey.placeholder = t("custom_providers.api_key_placeholder");
+    els.cpDefaultModel.value = "";
+    els.btnCpCancel.classList.add("hidden");
+    els.btnCpSubmit.textContent = t("custom_providers.add");
+  }
+
+  function renderCustomProviders() {
+    if (!els.customProvidersList) return;
+    const list = state.config?.custom_providers || [];
+    els.customProvidersList.innerHTML = "";
+
+    if (list.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "keys-empty";
+      empty.textContent = t("custom_providers.empty");
+      els.customProvidersList.appendChild(empty);
+      return;
+    }
+
+    for (const cp of list) {
+      const row = document.createElement("div");
+      row.className = "key-row custom-provider-row";
+      const keyBadge = cp.api_key_configured
+        ? cp.api_key_masked
+        : t("custom_providers.no_key");
+      const modelPart = cp.default_model ? ` · ${cp.default_model}` : "";
+      row.innerHTML = `
+        <div class="key-row-info">
+          <span class="key-row-name">${escapeHtml(cp.name)}</span>
+          <span class="key-row-mask custom-provider-meta">${escapeHtml(cp.base_url)}${escapeHtml(modelPart)} · ${escapeHtml(keyBadge)}</span>
+        </div>
+        <div class="custom-provider-actions">
+          <button type="button" class="pill-btn btn-cp-edit">${escapeHtml(t("custom_providers.edit"))}</button>
+          <button type="button" class="pill-btn pill-btn-danger btn-cp-delete">${escapeHtml(t("keys.remove"))}</button>
+        </div>
+      `;
+      row.querySelector(".btn-cp-edit").addEventListener("click", () => {
+        els.cpEditId.value = cp.id;
+        els.cpName.value = cp.name;
+        els.cpBaseUrl.value = cp.base_url;
+        els.cpApiKey.value = "";
+        els.cpApiKey.placeholder = cp.api_key_configured
+          ? t("custom_providers.api_key_keep_placeholder")
+          : t("custom_providers.api_key_placeholder");
+        els.cpDefaultModel.value = cp.default_model || "";
+        els.btnCpCancel.classList.remove("hidden");
+        els.btnCpSubmit.textContent = t("custom_providers.save");
+        els.customProviderMsg.textContent = "";
+        els.cpName.focus();
+      });
+      row.querySelector(".btn-cp-delete").addEventListener("click", async () => {
+        els.customProviderMsg.textContent = "";
+        await api(`/api/custom-providers/${encodeURIComponent(cp.id)}`, {
+          method: "DELETE",
+        });
+        delete state.providerModelsCache[cp.id];
+        if (els.cpEditId.value === cp.id) {
+          resetCustomProviderForm();
+        }
+        await loadProviders();
+        await loadConfig();
+        renderSessions();
+        els.customProviderMsg.textContent = t("custom_providers.deleted");
+      });
+      els.customProvidersList.appendChild(row);
+    }
+  }
 
   function renderConfiguredKeys() {
     const masked = state.config?.api_keys_masked || {};
-    const configured = ["claude", "gemini", "grok", "openai", "openrouter", "custom"].filter(
+    const configured = ["claude", "gemini", "grok", "openai", "openrouter"].filter(
       (id) => !!masked[id]
     );
     els.configuredKeysList.innerHTML = "";
@@ -1112,9 +1247,8 @@
   async function loadConfig() {
     state.config = await api("/api/config");
     renderConfiguredKeys();
-    if (els.cfgCustomBaseUrl) {
-      els.cfgCustomBaseUrl.value = state.config.custom_llm_base_url || "";
-    }
+    renderCustomProviders();
+    populateProviderSelects();
     els.cfgDefaultProvider.value = state.config.default_provider;
     populateDefaultModels(state.config.default_provider, state.config.default_model);
     document.getElementById("cfg-max-steps").value = state.config.max_agent_steps;
@@ -1829,22 +1963,59 @@
     els.keysSaveMsg.textContent = t("keys.saved", { provider: PROVIDER_LABELS[provider] || provider });
   });
 
-  if (els.customLlmForm) {
-    els.customLlmForm.addEventListener("submit", async (e) => {
+  if (els.btnCpCancel) {
+    els.btnCpCancel.addEventListener("click", () => {
+      resetCustomProviderForm();
+      els.customProviderMsg.textContent = "";
+    });
+  }
+
+  if (els.customProviderForm) {
+    els.customProviderForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      els.customLlmSaveMsg.textContent = "";
-      const url = els.cfgCustomBaseUrl.value.trim();
-      await api("/api/config", {
-        method: "PUT",
-        body: JSON.stringify({ custom_llm_base_url: url }),
-      });
-      delete state.providerModelsCache.custom;
-      await loadConfig();
-      const active = getActiveSession();
-      if (active && active.provider === "custom") {
-        await fetchModelsForProvider("custom", true);
+      els.customProviderMsg.textContent = "";
+      const editId = els.cpEditId.value.trim();
+      const name = els.cpName.value.trim();
+      const base_url = els.cpBaseUrl.value.trim();
+      const api_key_raw = els.cpApiKey.value.trim();
+      const default_model = els.cpDefaultModel.value.trim();
+      if (!name || !base_url) return;
+
+      const payload = { name, base_url, default_model };
+      if (!editId) {
+        payload.api_key = api_key_raw;
+      } else if (api_key_raw) {
+        payload.api_key = api_key_raw;
       }
-      els.customLlmSaveMsg.textContent = t("custom_llm.saved");
+
+      try {
+        const res = editId
+          ? await api(`/api/custom-providers/${encodeURIComponent(editId)}`, {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            })
+          : await api("/api/custom-providers", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+        const providerId = res.provider?.id || editId;
+        if (providerId) {
+          delete state.providerModelsCache[providerId];
+        }
+        resetCustomProviderForm();
+        await loadProviders();
+        await loadConfig();
+        renderSessions();
+        const active = getActiveSession();
+        if (active && active.provider === providerId) {
+          await fetchModelsForProvider(providerId, true);
+        }
+        els.customProviderMsg.textContent = editId
+          ? t("custom_providers.updated")
+          : t("custom_providers.added");
+      } catch (err) {
+        els.customProviderMsg.textContent = err.message || "Error";
+      }
     });
   }
 
@@ -2619,6 +2790,7 @@
     if (appBooted) {
       renderAll();
       renderConfiguredKeys();
+      renderCustomProviders();
       refreshStatus();
       refreshAuthStatus().catch(() => {});
       if (state.config) {
@@ -2631,8 +2803,7 @@
     if (appBooted) return;
     appBooted = true;
     await refreshAuthStatus();
-    const pData = await api("/api/providers");
-    state.providers = pData.providers || [];
+    await loadProviders();
     await loadConfig();
     await Promise.all([loadSessions(), loadAppMemory(), loadCredentials(), loadEmulatorConfig()]);
     await refreshStatus();

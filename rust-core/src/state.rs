@@ -6,18 +6,44 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, RwLock};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Provider {
     Claude,
     Gemini,
     Grok,
     OpenAI,
     OpenRouter,
-    Custom,
+    Custom(String),
 }
 
 impl Provider {
+    pub fn from_id(id: &str) -> Self {
+        let trimmed = id.trim();
+        match trimmed.to_lowercase().as_str() {
+            "claude" => Provider::Claude,
+            "gemini" => Provider::Gemini,
+            "grok" => Provider::Grok,
+            "openai" => Provider::OpenAI,
+            "openrouter" => Provider::OpenRouter,
+            _ => Provider::Custom(trimmed.to_string()),
+        }
+    }
+
+    pub fn as_id(&self) -> &str {
+        match self {
+            Provider::Claude => "claude",
+            Provider::Gemini => "gemini",
+            Provider::Grok => "grok",
+            Provider::OpenAI => "openai",
+            Provider::OpenRouter => "openrouter",
+            Provider::Custom(id) => id.as_str(),
+        }
+    }
+
+    pub fn is_custom(&self) -> bool {
+        matches!(self, Provider::Custom(_))
+    }
+
     pub fn default_model(&self) -> &'static str {
         match self {
             Provider::Claude => "claude-sonnet-4-20250514",
@@ -25,7 +51,7 @@ impl Provider {
             Provider::Grok => "grok-3",
             Provider::OpenAI => "gpt-4o",
             Provider::OpenRouter => "anthropic/claude-sonnet-4",
-            Provider::Custom => "llama3.2",
+            Provider::Custom(_) => "",
         }
     }
 
@@ -36,9 +62,39 @@ impl Provider {
             Provider::Grok => "Grok (xAI)",
             Provider::OpenAI => "OpenAI",
             Provider::OpenRouter => "OpenRouter",
-            Provider::Custom => "Custom / Local (Ollama)",
+            Provider::Custom(_) => "Custom Provider",
         }
     }
+}
+
+impl Serialize for Provider {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_id())
+    }
+}
+
+impl<'de> Deserialize<'de> for Provider {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Provider::from_id(&s))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomProvider {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub default_model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +134,7 @@ impl ApiKeys {
             Provider::Grok => &self.grok,
             Provider::OpenAI => &self.openai,
             Provider::OpenRouter => &self.openrouter,
-            Provider::Custom => &self.custom,
+            Provider::Custom(_) => &self.custom,
         }
     }
 }
@@ -113,7 +169,9 @@ pub struct TelegramConfig {
 pub struct AppConfig {
     #[serde(default)]
     pub api_keys: ApiKeys,
-    #[serde(default = "default_custom_llm_base_url")]
+    #[serde(default)]
+    pub custom_providers: Vec<CustomProvider>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub custom_llm_base_url: String,
     #[serde(default = "default_provider")]
     pub default_provider: Provider,
@@ -139,9 +197,29 @@ pub struct AppConfig {
     pub telegram: TelegramConfig,
 }
 
-fn default_custom_llm_base_url() -> String {
-    "http://10.0.2.2:11434/v1".to_string()
+impl AppConfig {
+    pub fn find_custom_provider(&self, id: &str) -> Option<&CustomProvider> {
+        self.custom_providers.iter().find(|p| p.id == id)
+    }
+
+    pub fn resolve_provider_credentials(&self, provider: &Provider) -> Result<(String, String), String> {
+        match provider {
+            Provider::Custom(id) => {
+                if let Some(cp) = self.find_custom_provider(id) {
+                    Ok((cp.api_key.clone(), cp.base_url.clone()))
+                } else if id == "custom" && !self.custom_llm_base_url.trim().is_empty() {
+                    Ok((self.api_keys.custom.clone(), self.custom_llm_base_url.clone()))
+                } else {
+                    Err(format!(
+                        "Custom provider '{id}' was not found. Please add or re-select a provider in Settings."
+                    ))
+                }
+            }
+            _ => Ok((self.api_keys.get(provider).to_string(), String::new())),
+        }
+    }
 }
+
 fn default_provider() -> Provider {
     Provider::Gemini
 }
@@ -177,7 +255,8 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             api_keys: ApiKeys::default(),
-            custom_llm_base_url: default_custom_llm_base_url(),
+            custom_providers: Vec::new(),
+            custom_llm_base_url: String::new(),
             default_provider: default_provider(),
             default_model: default_model_str(),
             max_agent_steps: default_max_steps(),

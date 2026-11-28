@@ -2,7 +2,7 @@ use crate::agent::{execute_device_tool, run_agent_turn};
 use crate::auth;
 use crate::bridge::DeviceBridge;
 use crate::llm::fetch_provider_models;
-use crate::state::{now_ms, AppPlaybook, AppState, CredentialEntry, Provider, Session};
+use crate::state::{now_ms, AppPlaybook, AppState, CredentialEntry, CustomProvider, Provider, Session};
 use crate::telegram::spawn_telegram_worker;
 use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -59,6 +59,11 @@ pub async fn start_http_server(
         .route("/api/config", get(api_get_config).put(api_update_config))
         .route("/api/providers", get(api_providers))
         .route("/api/providers/:provider/models", get(api_provider_models))
+        .route("/api/custom-providers", post(api_create_custom_provider))
+        .route(
+            "/api/custom-providers/:id",
+            axum::routing::put(api_update_custom_provider).delete(api_delete_custom_provider),
+        )
         .route("/api/sessions", get(api_list_sessions).post(api_create_session))
         .route(
             "/api/sessions/:id",
@@ -601,6 +606,7 @@ async fn api_internal_restore(
             || !cur.api_keys.grok.is_empty()
             || !cur.api_keys.openai.is_empty()
             || !cur.api_keys.openrouter.is_empty()
+            || !cur.custom_providers.is_empty()
             || !cur.telegram.bot_token.is_empty();
         if already_configured {
             return Json(json!({ "ok": true, "restored": false, "reason": "already_configured" }))
@@ -714,79 +720,107 @@ async fn api_status(State(ctx): State<ServerCtx>) -> Json<Value> {
         })
     });
     let cfg = ctx.state.config.read().await;
+    let mut configured_providers = serde_json::Map::new();
+    configured_providers.insert("claude".into(), json!(!cfg.api_keys.claude.trim().is_empty()));
+    configured_providers.insert("gemini".into(), json!(!cfg.api_keys.gemini.trim().is_empty()));
+    configured_providers.insert("grok".into(), json!(!cfg.api_keys.grok.trim().is_empty()));
+    configured_providers.insert("openai".into(), json!(!cfg.api_keys.openai.trim().is_empty()));
+    configured_providers.insert("openrouter".into(), json!(!cfg.api_keys.openrouter.trim().is_empty()));
+    for cp in &cfg.custom_providers {
+        configured_providers.insert(cp.id.clone(), json!(!cp.base_url.trim().is_empty()));
+    }
     Json(json!({
         "ok": true,
         "port": ctx.state.port,
         "device": device_status,
         "latest_frame": frame_info,
-        "configured_providers": {
-            "claude": !cfg.api_keys.claude.trim().is_empty(),
-            "gemini": !cfg.api_keys.gemini.trim().is_empty(),
-            "grok": !cfg.api_keys.grok.trim().is_empty(),
-            "openai": !cfg.api_keys.openai.trim().is_empty(),
-            "openrouter": !cfg.api_keys.openrouter.trim().is_empty(),
-            "custom": !cfg.custom_llm_base_url.trim().is_empty(),
-        }
+        "configured_providers": Value::Object(configured_providers),
     }))
 }
 
-async fn api_providers() -> Json<Value> {
-    Json(json!({
-        "providers": [
-            {
-                "id": "claude",
-                "name": "Claude (Anthropic)",
-                "models": ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"]
-            },
-            {
-                "id": "gemini",
-                "name": "Gemini (Google)",
-                "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
-            },
-            {
-                "id": "grok",
-                "name": "Grok (xAI)",
-                "models": ["grok-3", "grok-3-mini", "grok-2-vision-1212"]
-            },
-            {
-                "id": "openai",
-                "name": "OpenAI",
-                "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o4-mini"]
-            },
-            {
-                "id": "openrouter",
-                "name": "OpenRouter",
-                "models": ["anthropic/claude-sonnet-4", "google/gemini-2.5-flash", "openai/gpt-4o", "deepseek/deepseek-chat-v3-0324"]
-            },
-            {
-                "id": "custom",
-                "name": "Custom / Local (Ollama)",
-                "models": ["llama3.2", "qwen2.5:14b", "qwen2.5vl:7b", "gemma3:12b"]
-            }
-        ]
-    }))
+async fn api_providers(State(ctx): State<ServerCtx>) -> Json<Value> {
+    let custom_providers = ctx.state.config.read().await.custom_providers.clone();
+    let mut list = vec![
+        json!({
+            "id": "claude",
+            "name": "Claude (Anthropic)",
+            "models": ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"]
+        }),
+        json!({
+            "id": "gemini",
+            "name": "Gemini (Google)",
+            "models": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"]
+        }),
+        json!({
+            "id": "grok",
+            "name": "Grok (xAI)",
+            "models": ["grok-3", "grok-3-mini", "grok-2-vision-1212"]
+        }),
+        json!({
+            "id": "openai",
+            "name": "OpenAI",
+            "models": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o4-mini"]
+        }),
+        json!({
+            "id": "openrouter",
+            "name": "OpenRouter",
+            "models": ["anthropic/claude-sonnet-4", "google/gemini-2.5-flash", "openai/gpt-4o", "deepseek/deepseek-chat-v3-0324"]
+        }),
+    ];
+    for cp in custom_providers {
+        let models: Vec<String> = if cp.default_model.trim().is_empty() {
+            Vec::new()
+        } else {
+            vec![cp.default_model.trim().to_string()]
+        };
+        list.push(json!({
+            "id": cp.id,
+            "name": cp.name,
+            "custom": true,
+            "base_url": cp.base_url,
+            "models": models,
+        }));
+    }
+    Json(json!({ "providers": list }))
 }
 
 async fn api_provider_models(
     State(ctx): State<ServerCtx>,
     Path(provider_str): Path<String>,
 ) -> Result<Json<Value>, StatusCode> {
-    let provider = match provider_str.to_lowercase().as_str() {
-        "claude" => Provider::Claude,
-        "gemini" => Provider::Gemini,
-        "grok" => Provider::Grok,
-        "openai" => Provider::OpenAI,
-        "openrouter" => Provider::OpenRouter,
-        "custom" => Provider::Custom,
-        _ => return Err(StatusCode::BAD_REQUEST),
+    let provider = Provider::from_id(&provider_str);
+    let (api_key, custom_base_url, fallback_model) = {
+        let cfg = ctx.state.config.read().await;
+        match &provider {
+            Provider::Custom(id) => {
+                if let Some(cp) = cfg.find_custom_provider(id) {
+                    (
+                        cp.api_key.clone(),
+                        cp.base_url.clone(),
+                        cp.default_model.trim().to_string(),
+                    )
+                } else if id == "custom" && !cfg.custom_llm_base_url.trim().is_empty() {
+                    (
+                        cfg.api_keys.custom.clone(),
+                        cfg.custom_llm_base_url.clone(),
+                        "llama3.2".to_string(),
+                    )
+                } else {
+                    return Err(StatusCode::NOT_FOUND);
+                }
+            }
+            _ => (
+                cfg.api_keys.get(&provider).to_string(),
+                String::new(),
+                provider.default_model().to_string(),
+            ),
+        }
     };
 
-    let (api_key, custom_base_url) = {
-        let cfg = ctx.state.config.read().await;
-        (
-            cfg.api_keys.get(&provider).to_string(),
-            cfg.custom_llm_base_url.clone(),
-        )
+    let fallback_list: Vec<String> = if fallback_model.is_empty() {
+        Vec::new()
+    } else {
+        vec![fallback_model]
     };
 
     match fetch_provider_models(&ctx.state.http_client, &provider, &api_key, &custom_base_url).await {
@@ -801,23 +835,149 @@ async fn api_provider_models(
             "source": "fallback",
             "provider": provider,
             "error": "Provider returned an empty model list.",
-            "models": [provider.default_model()]
+            "models": fallback_list
         }))),
         Err(err) => Ok(Json(json!({
             "ok": false,
             "source": "fallback",
             "provider": provider,
             "error": err,
-            "models": [provider.default_model()]
+            "models": fallback_list
         }))),
     }
+}
+
+#[derive(Serialize)]
+struct SafeCustomProvider {
+    id: String,
+    name: String,
+    base_url: String,
+    default_model: String,
+    api_key_configured: bool,
+    api_key_masked: String,
+}
+
+fn to_safe_custom_provider(cp: &CustomProvider) -> SafeCustomProvider {
+    SafeCustomProvider {
+        id: cp.id.clone(),
+        name: cp.name.clone(),
+        base_url: cp.base_url.clone(),
+        default_model: cp.default_model.clone(),
+        api_key_configured: !cp.api_key.trim().is_empty(),
+        api_key_masked: mask_key(&cp.api_key),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpsertCustomProviderRequest {
+    name: String,
+    base_url: String,
+    #[serde(default)]
+    api_key: Option<String>,
+    #[serde(default)]
+    default_model: String,
+}
+
+async fn api_create_custom_provider(
+    State(ctx): State<ServerCtx>,
+    Json(req): Json<UpsertCustomProviderRequest>,
+) -> Response {
+    let name = req.name.trim().to_string();
+    let base_url = req.base_url.trim().to_string();
+    if name.is_empty() || base_url.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Provider name and Base URL are required." })),
+        )
+            .into_response();
+    }
+    let short_id: String = uuid::Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(8)
+        .collect();
+    let cp = CustomProvider {
+        id: format!("custom_{short_id}"),
+        name,
+        base_url,
+        api_key: req.api_key.unwrap_or_default().trim().to_string(),
+        default_model: req.default_model.trim().to_string(),
+    };
+    let safe = to_safe_custom_provider(&cp);
+    {
+        let mut cfg = ctx.state.config.write().await;
+        cfg.custom_providers.push(cp);
+    }
+    ctx.state.save_config().await;
+    Json(json!({ "ok": true, "provider": safe })).into_response()
+}
+
+async fn api_update_custom_provider(
+    State(ctx): State<ServerCtx>,
+    Path(id): Path<String>,
+    Json(req): Json<UpsertCustomProviderRequest>,
+) -> Response {
+    let name = req.name.trim().to_string();
+    let base_url = req.base_url.trim().to_string();
+    if name.is_empty() || base_url.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "ok": false, "error": "Provider name and Base URL are required." })),
+        )
+            .into_response();
+    }
+    let updated = {
+        let mut cfg = ctx.state.config.write().await;
+        let Some(cp) = cfg.custom_providers.iter_mut().find(|p| p.id == id) else {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "ok": false, "error": "Custom provider not found." })),
+            )
+                .into_response();
+        };
+        cp.name = name;
+        cp.base_url = base_url;
+        if let Some(key) = req.api_key {
+            cp.api_key = key.trim().to_string();
+        }
+        cp.default_model = req.default_model.trim().to_string();
+        to_safe_custom_provider(cp)
+    };
+    ctx.state.save_config().await;
+    Json(json!({ "ok": true, "provider": updated })).into_response()
+}
+
+async fn api_delete_custom_provider(
+    State(ctx): State<ServerCtx>,
+    Path(id): Path<String>,
+) -> Response {
+    let removed = {
+        let mut cfg = ctx.state.config.write().await;
+        let before = cfg.custom_providers.len();
+        cfg.custom_providers.retain(|p| p.id != id);
+        if cfg.default_provider == Provider::Custom(id.clone()) {
+            cfg.default_provider = Provider::Gemini;
+            cfg.default_model = Provider::Gemini.default_model().to_string();
+        }
+        cfg.custom_providers.len() < before
+    };
+    if !removed {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "error": "Custom provider not found." })),
+        )
+            .into_response();
+    }
+    ctx.state.save_config().await;
+    Json(json!({ "ok": true })).into_response()
 }
 
 #[derive(Serialize)]
 struct SafeConfigResponse {
     api_keys_configured: Value,
     api_keys_masked: Value,
-    custom_llm_base_url: String,
+    custom_providers: Vec<SafeCustomProvider>,
     default_provider: Provider,
     default_model: String,
     max_agent_steps: usize,
@@ -847,24 +1007,30 @@ fn mask_key(key: &str) -> String {
 async fn api_get_config(State(ctx): State<ServerCtx>) -> Json<SafeConfigResponse> {
     let cfg = ctx.state.config.read().await.clone();
     let tg_status = ctx.state.telegram_status.read().await.clone();
+    let mut configured_map = serde_json::Map::new();
+    configured_map.insert("claude".into(), json!(!cfg.api_keys.claude.trim().is_empty()));
+    configured_map.insert("gemini".into(), json!(!cfg.api_keys.gemini.trim().is_empty()));
+    configured_map.insert("grok".into(), json!(!cfg.api_keys.grok.trim().is_empty()));
+    configured_map.insert("openai".into(), json!(!cfg.api_keys.openai.trim().is_empty()));
+    configured_map.insert("openrouter".into(), json!(!cfg.api_keys.openrouter.trim().is_empty()));
+    for cp in &cfg.custom_providers {
+        configured_map.insert(cp.id.clone(), json!(!cp.base_url.trim().is_empty()));
+    }
+    let custom_providers: Vec<SafeCustomProvider> = cfg
+        .custom_providers
+        .iter()
+        .map(to_safe_custom_provider)
+        .collect();
     Json(SafeConfigResponse {
-        api_keys_configured: json!({
-            "claude": !cfg.api_keys.claude.trim().is_empty(),
-            "gemini": !cfg.api_keys.gemini.trim().is_empty(),
-            "grok": !cfg.api_keys.grok.trim().is_empty(),
-            "openai": !cfg.api_keys.openai.trim().is_empty(),
-            "openrouter": !cfg.api_keys.openrouter.trim().is_empty(),
-            "custom": !cfg.custom_llm_base_url.trim().is_empty(),
-        }),
+        api_keys_configured: Value::Object(configured_map),
         api_keys_masked: json!({
             "claude": mask_key(&cfg.api_keys.claude),
             "gemini": mask_key(&cfg.api_keys.gemini),
             "grok": mask_key(&cfg.api_keys.grok),
             "openai": mask_key(&cfg.api_keys.openai),
             "openrouter": mask_key(&cfg.api_keys.openrouter),
-            "custom": mask_key(&cfg.api_keys.custom),
         }),
-        custom_llm_base_url: cfg.custom_llm_base_url,
+        custom_providers,
         default_provider: cfg.default_provider,
         default_model: cfg.default_model,
         max_agent_steps: cfg.max_agent_steps,

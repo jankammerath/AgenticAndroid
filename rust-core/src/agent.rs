@@ -94,7 +94,7 @@ async fn execute_agent_loop(
     };
 
     let config = state.config.read().await.clone();
-    let api_key = config.api_keys.get(&provider).to_string();
+    let (api_key, custom_base_url) = config.resolve_provider_credentials(&provider)?;
     let max_steps = config.max_agent_steps.clamp(1, 1024);
 
     // Build initial conversation context
@@ -149,7 +149,7 @@ async fn execute_agent_loop(
             &state.http_client,
             &provider,
             &api_key,
-            &config.custom_llm_base_url,
+            &custom_base_url,
             &model,
             &config.system_prompt,
             &turn_messages,

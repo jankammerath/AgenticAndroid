@@ -147,7 +147,6 @@
                       <option value="grok">Grok</option>
                       <option value="openai">OpenAI</option>
                       <option value="openrouter">OpenRouter</option>
-                      <option value="custom">Custom / Local</option>
                     </select>
                     <select id="session-model-select" aria-label="AI Model"></select>
                     <button type="button" class="ghost-icon-btn" id="btn-refresh-models" title="Refresh models from provider API" data-i18n-title="chat.refresh_models_title">&#8635;</button>
@@ -297,7 +296,6 @@
                   <option value="grok">Grok (xAI)</option>
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
-                  <option value="custom">Custom / Local (Ollama)</option>
                 </select>
                 <input type="password" id="add-key-input" placeholder="Paste API key..." data-i18n-placeholder="keys.placeholder" autocomplete="off" />
                 <button type="submit" class="send-btn" data-i18n="keys.add">Add Key</button>
@@ -308,18 +306,43 @@
               <span class="save-msg" id="keys-save-msg"></span>
             </div>
 
-            <form class="security-card" id="custom-llm-form">
-              <h3 data-i18n="custom_llm.title">Custom / Local LLM (OpenAI-Compatible)</h3>
-              <p class="modal-desc" data-i18n="custom_llm.desc">Connect to Ollama, LM Studio, vLLM, or any OpenAI-compatible /v1 endpoint. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).</p>
-              <div class="field">
-                <label for="cfg-custom-base-url" data-i18n="custom_llm.base_url">Base URL</label>
-                <input type="url" id="cfg-custom-base-url" placeholder="http://10.0.2.2:11434/v1" autocomplete="off" />
-              </div>
-              <div class="modal-footer">
-                <span class="save-msg" id="custom-llm-save-msg"></span>
-                <button type="submit" class="send-btn" data-i18n="custom_llm.save">Save Endpoint</button>
-              </div>
-            </form>
+            <div class="security-card" id="custom-providers-card">
+              <h3 data-i18n="custom_providers.title">Custom Providers (OpenAI-Compatible)</h3>
+              <p class="modal-desc" data-i18n="custom_providers.desc">Add any OpenAI-compatible provider such as Ollama, LM Studio, DeepSeek, Groq, Together AI, or self-hosted vLLM. From an emulator, host localhost is 10.0.2.2 (e.g. http://10.0.2.2:11434/v1).</p>
+
+              <div class="keys-list" id="custom-providers-list"></div>
+
+              <form class="custom-provider-form" id="custom-provider-form">
+                <input type="hidden" id="cp-edit-id" value="" />
+                <div class="settings-row settings-row-2">
+                  <div class="field">
+                    <label for="cp-name" data-i18n="custom_providers.name">Provider Name</label>
+                    <input type="text" id="cp-name" placeholder="e.g. Ollama, DeepSeek, Groq" data-i18n-placeholder="custom_providers.name_placeholder" required autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="cp-default-model" data-i18n="custom_providers.default_model">Default Model (optional)</label>
+                    <input type="text" id="cp-default-model" placeholder="e.g. llama3.2 or deepseek-chat" data-i18n-placeholder="custom_providers.default_model_placeholder" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="settings-row settings-row-2">
+                  <div class="field">
+                    <label for="cp-base-url" data-i18n="custom_providers.base_url">Base URL</label>
+                    <input type="url" id="cp-base-url" placeholder="https://api.example.com/v1" required autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="cp-api-key" data-i18n="custom_providers.api_key">API Key (optional)</label>
+                    <input type="password" id="cp-api-key" placeholder="Leave blank if not required" data-i18n-placeholder="custom_providers.api_key_placeholder" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <span class="save-msg" id="custom-provider-msg"></span>
+                  <div class="security-actions">
+                    <button type="button" class="pill-btn hidden" id="btn-cp-cancel" data-i18n="custom_providers.cancel">Cancel</button>
+                    <button type="submit" class="send-btn" id="btn-cp-submit" data-i18n="custom_providers.add">Add Provider</button>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
 
           <!-- Tab 2: Models & Agent Behavior -->
@@ -337,7 +360,6 @@
                   <option value="grok">Grok (xAI)</option>
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
-                  <option value="custom">Custom / Local (Ollama)</option>
                 </select>
               </div>
               <div class="field">
